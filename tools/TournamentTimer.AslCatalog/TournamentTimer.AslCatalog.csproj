@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ApplicationIcon>..\..\assets\branding\tournament-timer.ico</ApplicationIcon>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>TournamentTimer.AslCatalog</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TournamentTimer.AslHost.PoC\AslHostOptions.cs" Link="AslHostOptions.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\AslSettingsConfigureForm.cs" Link="AslSettingsConfigureForm.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\AslSettingsPreset.cs" Link="AslSettingsPreset.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\AutoSplitterCatalogService.cs" Link="AutoSplitterCatalogService.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\AutosplitterCatalogForm.cs" Link="AutosplitterCatalogForm.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\HeadlessAslHost.cs" Link="HeadlessAslHost.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\LiveSplitRunLoader.cs" Link="LiveSplitRunLoader.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\RunnerBridgeEventSink.cs" Link="RunnerBridgeEventSink.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\StateChangeDetector.cs" Link="StateChangeDetector.cs" />
+    <Compile Include="..\TournamentTimer.AslHost.PoC\TraceDumper.cs" Link="TraceDumper.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+
+    <Reference Include="LiveSplit.ScriptableAutoSplit">
+      <HintPath>..\..\external\LiveSplit.ScriptableAutoSplit\artifacts\bin\LiveSplit.ScriptableAutoSplit\release\LiveSplit.ScriptableAutoSplit.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <Reference Include="LiveSplit.Core">
+      <HintPath>..\..\external\LiveSplit\bin\release\LiveSplit.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <Reference Include="UpdateManager">
+      <HintPath>..\..\external\LiveSplit\bin\release\UpdateManager.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <Reference Include="Irony">
+      <HintPath>..\..\external\LiveSplit.ScriptableAutoSplit\artifacts\bin\LiveSplit.ScriptableAutoSplit\release\Irony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

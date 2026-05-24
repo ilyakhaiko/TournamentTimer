@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TournamentTimer Overlay</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      font-family: Arial, sans-serif;
+      color: white;
+      overflow: hidden;
+    }
+
+    .overlay {
+      width: 760px;
+      padding: 22px 26px;
+      background: rgba(10, 12, 18, 0.82);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 22px;
+      box-sizing: border-box;
+    }
+
+    .meta {
+      font-size: 20px;
+      opacity: 0.78;
+      margin-bottom: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .runners {
+      display: grid;
+      gap: 14px;
+    }
+
+    .runner-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
+
+    .runner-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    .runner-id {
+      font-size: 20px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .runner-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      opacity: 0.78;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #ff9f9f;
+      box-shadow: 0 0 10px rgba(255,159,159,0.45);
+    }
+
+    .runner-card.connected .dot {
+      background: #8cffb3;
+      box-shadow: 0 0 10px rgba(140,255,179,0.45);
+    }
+
+    .runner-main {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .timer {
+      font-size: 58px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -2px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .split-box {
+      text-align: right;
+      min-width: 210px;
+      max-width: 320px;
+    }
+
+    .split {
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.95;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .gap {
+      margin-top: 6px;
+      font-size: 22px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .gap.leader {
+      color: #8cffb3;
+    }
+
+    .gap.behind {
+      color: #ffcf8c;
+    }
+
+    .gap.ahead {
+      color: #9fc0ff;
+    }
+
+    .gap-stack {
+      margin-top: 6px;
+      display: grid;
+      gap: 2px;
+      justify-items: end;
+    }
+
+    .gap-row {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: baseline;
+    }
+
+    .gap-label {
+      font-size: 12px;
+      opacity: .66;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 800;
+    }
+
+    .gap-row .gap {
+      margin-top: 0;
+      font-size: 20px;
+    }
+
+    .connection {
+      margin-top: 14px;
+      font-size: 16px;
+      opacity: 0.62;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+    }
+
+    .empty {
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.85;
+      padding: 18px 0 4px;
+    }
+
+    .error {
+      color: #ffb4b4;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay">
+    <div id="meta" class="meta">Loading...</div>
+    <div id="runners" class="runners"></div>
+    <div id="connection" class="connection">Runners: unknown</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const runId = params.get("runId") || "local-test-run";
+    const selectedRunnerId = params.get("runnerId");
+    const viewKey = (params.get("viewKey") || params.get("key") || "").trim();
+
+    const metaEl = document.getElementById("meta");
+    const runnersEl = document.getElementById("runners");
+    const connectionEl = document.getElementById("connection");
+
+    let lastState = null;
+    let lastRunnerIdsKey = "";
+    const runnerAnchors = new Map();
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatMs(ms) {
+      ms = Math.max(0, Math.floor(ms));
+
+      const totalSeconds = Math.floor(ms / 1000);
+      const milliseconds = ms % 1000;
+      const seconds = totalSeconds % 60;
+      const minutes = Math.floor(totalSeconds / 60) % 60;
+      const hours = Math.floor(totalSeconds / 3600);
+
+      const msText = String(milliseconds).padStart(3, "0");
+      const secText = String(seconds).padStart(2, "0");
+
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${secText}.${msText}`;
+      }
+
+      return `${minutes}:${secText}.${msText}`;
+    }
+
+    function normalizeRunner(raw) {
+      return {
+        runnerId: raw.runnerId || "runner-1",
+        clientId: raw.clientId || raw.runnerClientId || null,
+        connected: Boolean(raw.connected ?? raw.runnerConnected),
+        status: raw.status || "Ready",
+        displayElapsedMs: Number(raw.displayElapsedMs || 0),
+        currentSplitName: raw.currentSplitName || null,
+        lastCompletedSplitIndex: Number.isInteger(raw.lastCompletedSplitIndex) ? raw.lastCompletedSplitIndex : -1,
+        completedSplits: Array.isArray(raw.completedSplits) ? raw.completedSplits : [],
+        finishedAt: raw.finishedAt || null
+      };
+    }
+
+    function getRunnersFromState() {
+      if (!lastState) {
+        return [];
+      }
+
+      let runners = Array.isArray(lastState.runners) && lastState.runners.length > 0
+        ? lastState.runners.map(normalizeRunner)
+        : [normalizeRunner({
+            runnerId: "runner-1",
+            clientId: lastState.runnerClientId,
+            connected: lastState.runnerConnected,
+            status: lastState.status,
+            displayElapsedMs: lastState.displayElapsedMs,
+            currentSplitName: lastState.currentSplitName,
+            lastCompletedSplitIndex: Number.isInteger(lastState.lastCompletedSplitIndex) ? lastState.lastCompletedSplitIndex : -1,
+            completedSplits: Array.isArray(lastState.completedSplits) ? lastState.completedSplits : [],
+            finishedAt: lastState.finishedAt
+          })];
+
+      if (selectedRunnerId) {
+        runners = runners.filter(runner => runner.runnerId === selectedRunnerId);
+      }
+
+      return runners;
+    }
+
+    function getRunnerDisplayMs(runner) {
+      const anchor = runnerAnchors.get(runner.runnerId);
+
+      if (!anchor) {
+        return runner.displayElapsedMs;
+      }
+
+      if (anchor.status !== "Running") {
+        return anchor.elapsedMs;
+      }
+
+      return anchor.elapsedMs + (performance.now() - anchor.performanceMs);
+    }
+
+    function getSplitText(runner) {
+      if (runner.status === "Ready") {
+        return "Waiting for start";
+      }
+
+      if (runner.status === "Finished") {
+        return runner.finishedAt ? `Finished · ${runner.finishedAt}` : "Finished";
+      }
+
+      return runner.currentSplitName ? `Next: ${runner.currentSplitName}` : "Running";
+    }
+
+    function getCompletedSplit(runner, splitIndex) {
+      return (runner.completedSplits || [])
+        .find(split => split.splitIndex === splitIndex) || null;
+    }
+
+    function getBestCompletedTimeForSplit(runners, splitIndex) {
+      const times = [];
+
+      for (const runner of runners) {
+        const completed = getCompletedSplit(runner, splitIndex);
+
+        if (completed && Number.isFinite(Number(completed.clientElapsedMs))) {
+          times.push(Number(completed.clientElapsedMs));
+        }
+      }
+
+      return times.length ? Math.min(...times) : null;
+    }
+
+    function formatDeltaMs(deltaMs) {
+      const sign = deltaMs > 0
+        ? "+"
+        : deltaMs < 0
+          ? "−"
+          : "±";
+
+      return `${sign}${formatMs(Math.abs(deltaMs))}`;
+    }
+
+    function getRunnerProgressIndex(runner) {
+      if (!runner || runner.status === "Ready") {
+        return -1;
+      }
+
+      if (runner.status === "Finished") {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      return (runner.lastCompletedSplitIndex ?? -1) + 1;
+    }
+
+    function pluralizeSplits(count) {
+      return count === 1 ? "split" : "splits";
+    }
+
+    function getOverallGap(runner, runners) {
+      if (!runner || runners.length <= 1 || runner.status === "Ready") {
+        return null;
+      }
+
+      const activeRunners = runners.filter(other => other.status !== "Ready");
+
+      if (activeRunners.length <= 1) {
+        return null;
+      }
+
+      const leaderProgress = Math.max(...activeRunners.map(getRunnerProgressIndex));
+      const runnerProgress = getRunnerProgressIndex(runner);
+
+      if (runnerProgress < leaderProgress) {
+        const splitsBehind = leaderProgress === Number.POSITIVE_INFINITY
+          ? null
+          : leaderProgress - runnerProgress;
+
+        if (splitsBehind && splitsBehind > 0) {
+          return {
+            text: `+${splitsBehind} ${pluralizeSplits(splitsBehind)}`,
+            kind: "behind",
+            live: false
+          };
+        }
+
+        return null;
+      }
+
+      const sameProgressRunners = activeRunners
+        .filter(other => getRunnerProgressIndex(other) === runnerProgress);
+
+      const bestLiveMs = Math.min(...sameProgressRunners.map(getRunnerDisplayMs));
+      const deltaMs = Math.floor(getRunnerDisplayMs(runner) - bestLiveMs);
+
+      if (deltaMs <= 0) {
+        return null;
+      }
+
+      return {
+        text: formatDeltaMs(deltaMs),
+        kind: "behind",
+        live: true
+      };
+    }
+
+    function getSplitDelta(runner, splitIndex, runners) {
+      if (!runner || runners.length <= 1) {
+        return null;
+      }
+
+      const bestTime = getBestCompletedTimeForSplit(runners, splitIndex);
+
+      if (bestTime === null) {
+        return null;
+      }
+
+      const completed = getCompletedSplit(runner, splitIndex);
+
+      if (completed) {
+        const deltaMs = Number(completed.clientElapsedMs) - bestTime;
+
+        if (deltaMs <= 0) {
+          return null;
+        }
+
+        return {
+          text: formatDeltaMs(deltaMs),
+          kind: "behind",
+          live: false
+        };
+      }
+
+      const nextSplitIndex = (runner.lastCompletedSplitIndex ?? -1) + 1;
+      const isCurrent = runner.status === "Running" && nextSplitIndex === splitIndex;
+
+      if (!isCurrent) {
+        return null;
+      }
+
+      const liveDeltaMs = Math.floor(getRunnerDisplayMs(runner) - bestTime);
+
+      if (liveDeltaMs <= 0) {
+        return null;
+      }
+
+      return {
+        text: formatDeltaMs(liveDeltaMs),
+        kind: "behind",
+        live: true
+      };
+    }
+
+    function getRunnerGap(runner, runners) {
+      if (!runner || runners.length <= 1 || runner.status === "Ready") {
+        return null;
+      }
+
+      const nextSplitIndex = (runner.lastCompletedSplitIndex ?? -1) + 1;
+
+      if (runner.status === "Running") {
+        const liveDelta = getSplitDelta(runner, nextSplitIndex, runners);
+
+        if (liveDelta) {
+          return liveDelta;
+        }
+      }
+
+      const lastCompletedSplitIndex = runner.lastCompletedSplitIndex ?? -1;
+
+      if (lastCompletedSplitIndex >= 0) {
+        return getSplitDelta(runner, lastCompletedSplitIndex, runners);
+      }
+
+      return null;
+    }
+
+    function syncRunnerCards(runners) {
+      const key = runners.map(runner => runner.runnerId).join("|");
+
+      if (key === lastRunnerIdsKey) {
+        return;
+      }
+
+      lastRunnerIdsKey = key;
+
+      if (runners.length === 0) {
+        runnersEl.innerHTML = `<div class="empty">No runner data${selectedRunnerId ? ` for ${escapeHtml(selectedRunnerId)}` : ""}</div>`;
+        return;
+      }
+
+      runnersEl.innerHTML = runners.map(runner => `
+        <div class="runner-card" data-runner-id="${escapeHtml(runner.runnerId)}">
+          <div class="runner-header">
+            <div class="runner-id">${escapeHtml(runner.runnerId)}</div>
+            <div class="runner-state">
+              <span class="dot"></span>
+              <span data-runner-status="${escapeHtml(runner.runnerId)}">Ready</span>
+            </div>
+          </div>
+          <div class="runner-main">
+            <div class="timer" data-runner-timer="${escapeHtml(runner.runnerId)}">0:00.000</div>
+            <div class="split-box">
+              <div class="split" data-runner-split="${escapeHtml(runner.runnerId)}">Waiting</div>
+              <div class="gap-stack">
+                <div class="gap-row"><span class="gap-label">Overall</span><span class="gap" data-runner-live-gap="${escapeHtml(runner.runnerId)}"></span></div>
+                <div class="gap-row"><span class="gap-label">Split</span><span class="gap" data-runner-split-gap="${escapeHtml(runner.runnerId)}"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function findRunnerElement(attributeName, runnerId) {
+      return [...document.querySelectorAll(`[${attributeName}]`)]
+        .find(element => element.getAttribute(attributeName) === runnerId);
+    }
+
+    function render() {
+      if (lastState) {
+        const runners = getRunnersFromState();
+        syncRunnerCards(runners);
+
+        metaEl.textContent = selectedRunnerId
+          ? `${lastState.game} — ${lastState.category} · ${lastState.runId} · ${selectedRunnerId}`
+          : `${lastState.game} — ${lastState.category} · ${lastState.runId}`;
+
+        const connectedCount = runners.filter(runner => runner.connected).length;
+        connectionEl.textContent = `${connectedCount}/${runners.length} runner${runners.length === 1 ? "" : "s"} connected`;
+        connectionEl.classList.remove("error");
+
+        for (const runner of runners) {
+          const cardEl = [...document.querySelectorAll(".runner-card")]
+            .find(element => element.getAttribute("data-runner-id") === runner.runnerId);
+          const timerEl = findRunnerElement("data-runner-timer", runner.runnerId);
+          const splitEl = findRunnerElement("data-runner-split", runner.runnerId);
+          const liveGapEl = findRunnerElement("data-runner-live-gap", runner.runnerId);
+          const splitGapEl = findRunnerElement("data-runner-split-gap", runner.runnerId);
+          const statusEl = findRunnerElement("data-runner-status", runner.runnerId);
+
+          if (cardEl) {
+            cardEl.classList.toggle("connected", runner.connected);
+          }
+
+          if (timerEl) {
+            timerEl.textContent = formatMs(getRunnerDisplayMs(runner));
+          }
+
+          if (splitEl) {
+            splitEl.textContent = getSplitText(runner);
+          }
+
+          if (liveGapEl) {
+            const liveGap = getOverallGap(runner, runners);
+
+            liveGapEl.textContent = liveGap ? liveGap.text : "";
+            liveGapEl.className = liveGap
+              ? `gap ${liveGap.kind}${liveGap.live ? " live" : ""}`
+              : "gap";
+          }
+
+          if (splitGapEl) {
+            const splitGap = getRunnerGap(runner, runners);
+
+            splitGapEl.textContent = splitGap ? splitGap.text : "";
+            splitGapEl.className = splitGap
+              ? `gap ${splitGap.kind}${splitGap.live ? " live" : ""}`
+              : "gap";
+          }
+
+          if (statusEl) {
+            statusEl.textContent = `${runner.status}${runner.connected ? " · connected" : " · disconnected"}`;
+          }
+        }
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    async function pollState() {
+      try {
+        const headers = {};
+
+        if (viewKey) {
+          headers["X-View-Key"] = viewKey;
+        }
+
+        const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/display-state`, {
+          cache: "no-store",
+          headers
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const state = await response.json();
+        const runners = Array.isArray(state.runners) && state.runners.length > 0
+          ? state.runners.map(normalizeRunner)
+          : [normalizeRunner({
+              runnerId: "runner-1",
+              clientId: state.runnerClientId,
+              connected: state.runnerConnected,
+              status: state.status,
+              displayElapsedMs: state.displayElapsedMs,
+              currentSplitName: state.currentSplitName,
+              lastCompletedSplitIndex: Number.isInteger(state.lastCompletedSplitIndex) ? state.lastCompletedSplitIndex : -1,
+              completedSplits: Array.isArray(state.completedSplits) ? state.completedSplits : [],
+              finishedAt: state.finishedAt
+            })];
+
+        lastState = state;
+
+        for (const runner of runners) {
+          runnerAnchors.set(runner.runnerId, {
+            status: runner.status,
+            elapsedMs: runner.displayElapsedMs,
+            performanceMs: performance.now()
+          });
+        }
+
+        connectionEl.classList.remove("error");
+      } catch (error) {
+        metaEl.textContent = `${runId}`;
+        connectionEl.textContent = `Connection error: ${error.message}`;
+        connectionEl.classList.add("error");
+      }
+    }
+
+    render();
+    pollState();
+    setInterval(pollState, 1000);
+  </script>
+</body>
+</html>

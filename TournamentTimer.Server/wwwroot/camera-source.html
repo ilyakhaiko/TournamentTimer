@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Runner Camera Source</title>
+  <style>
+    :root { color-scheme: dark; font-family: Arial, sans-serif; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #video { width: 100vw; height: 100vh; object-fit: var(--camera-fit, cover); background: transparent; }
+    #status {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      background: rgba(9, 11, 16, .82);
+      color: #f4f7ff;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 10px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      opacity: .78;
+    }
+    .hide { display: none; }
+  </style>
+</head>
+<body>
+  <video id="video" autoplay playsinline muted></video>
+  <div id="status">connecting...</div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const runId = params.get("runId") || "local-test-run";
+    const runnerId = params.get("runnerId") || "runner-1";
+    const viewKey = params.get("viewKey") || params.get("key") || "";
+    const viewerId = params.get("viewerId") || `obs-${runnerId}-${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2)}`;
+    const showStatus = params.get("status") === "1";
+    const cameraFit = params.get("fit") || "cover";
+    document.documentElement.style.setProperty("--camera-fit", cameraFit === "cover" ? "cover" : "contain");
+
+    const videoEl = document.getElementById("video");
+    const statusEl = document.getElementById("status");
+    let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+    let iceTransportPolicy = "all";
+    let iceServersPromise = null;
+
+    let pc = null;
+    let reconnectTimer = null;
+    let stateTimer = null;
+    let connectAttempt = 0;
+    let hasVideo = false;
+
+    if (!showStatus) statusEl.classList.add("hide");
+
+    function setStatus(text) {
+      statusEl.textContent = `${runnerId}: ${text}`;
+    }
+
+    function accessHeaders(json = true) {
+      const headers = {};
+      if (json) headers["Content-Type"] = "application/json";
+      if (viewKey) headers["X-View-Key"] = viewKey;
+      return headers;
+    }
+
+    function mediaUrl(path) {
+      return `/api/runs/${encodeURIComponent(runId)}/media/runners/${encodeURIComponent(runnerId)}${path}`;
+    }
+
+    function runMediaUrl(path) {
+      return `/api/runs/${encodeURIComponent(runId)}/media${path}`;
+    }
+
+    async function ensureIceServers() {
+      if (iceServersPromise) {
+        return await iceServersPromise;
+      }
+
+      iceServersPromise = (async () => {
+        try {
+          const response = await fetch(runMediaUrl("/ice-servers"), {
+            headers: accessHeaders(false),
+            cache: "no-store"
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const result = await response.json();
+
+          if (Array.isArray(result.iceServers) && result.iceServers.length > 0) {
+            iceServers = result.iceServers;
+          }
+
+          iceTransportPolicy = result.iceTransportPolicy === "relay" ? "relay" : "all";
+        } catch {
+          iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+          iceTransportPolicy = "all";
+        }
+
+        return iceServers;
+      })();
+
+      return await iceServersPromise;
+    }
+
+    function createPeerConnection() {
+      return new RTCPeerConnection({ iceServers, iceTransportPolicy });
+    }
+
+    async function postJson(path, payload) {
+      const response = await fetch(mediaUrl(path), {
+        method: "POST",
+        headers: accessHeaders(true),
+        body: JSON.stringify(payload || {})
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json().catch(() => null);
+    }
+
+    async function getJson(path) {
+      const response = await fetch(mediaUrl(path), {
+        headers: accessHeaders(false),
+        cache: "no-store"
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    }
+
+    function waitForIceGatheringComplete(peerConnection) {
+      if (peerConnection.iceGatheringState === "complete") {
+        return Promise.resolve();
+      }
+
+      return new Promise(resolve => {
+        const timeout = setTimeout(resolve, 4000);
+
+        peerConnection.addEventListener("icegatheringstatechange", () => {
+          if (peerConnection.iceGatheringState === "complete") {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+      });
+    }
+
+    function closeConnection() {
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+    }
+
+    function scheduleReconnect(ms = 3500) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, ms);
+    }
+
+    async function connect() {
+      const attempt = ++connectAttempt;
+      closeConnection();
+      hasVideo = false;
+      videoEl.srcObject = null;
+      setStatus("connecting...");
+
+      try {
+        await ensureIceServers();
+        const cameraState = await getJson("/camera-state");
+        if (attempt !== connectAttempt) return;
+
+        if (!cameraState.online) {
+          setStatus(cameraState.status || "offline");
+          scheduleReconnect(3000);
+          return;
+        }
+
+        pc = createPeerConnection();
+        const activePc = pc;
+
+        activePc.addTransceiver("video", { direction: "recvonly" });
+
+        activePc.addEventListener("track", event => {
+          if (attempt !== connectAttempt || activePc !== pc) return;
+
+          hasVideo = true;
+          videoEl.srcObject = event.streams[0];
+          videoEl.play?.().catch(() => {});
+          setStatus("live");
+        });
+
+        activePc.addEventListener("connectionstatechange", () => {
+          if (attempt !== connectAttempt || activePc !== pc) return;
+
+          if (activePc.connectionState === "connected") {
+            setStatus(hasVideo ? "live" : "waiting for video...");
+          }
+
+          if (activePc.connectionState === "disconnected") {
+            setStatus("disconnected");
+            scheduleReconnect(10000);
+          }
+
+          if (["failed", "closed"].includes(activePc.connectionState)) {
+            setStatus(activePc.connectionState);
+            scheduleReconnect(5000);
+          }
+        });
+
+        const offer = await activePc.createOffer();
+        if (attempt !== connectAttempt || activePc !== pc) return;
+
+        await activePc.setLocalDescription(offer);
+        await waitForIceGatheringComplete(activePc);
+        if (attempt !== connectAttempt || activePc !== pc) return;
+
+        await postJson("/offers", {
+          viewerId,
+          offerSdp: activePc.localDescription.sdp
+        });
+
+        setStatus("waiting for answer...");
+        const startedAt = Date.now();
+
+        while (Date.now() - startedAt < 30000) {
+          if (attempt !== connectAttempt || activePc !== pc) return;
+
+          const answer = await getJson(`/offers/${encodeURIComponent(viewerId)}/answer`);
+
+          if (answer.ready && answer.answerSdp) {
+            await activePc.setRemoteDescription({ type: "answer", sdp: answer.answerSdp });
+
+            if (attempt !== connectAttempt || activePc !== pc) return;
+
+            setStatus(hasVideo ? "live" : "waiting for video...");
+            return;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 700));
+        }
+
+        throw new Error("answer_timeout");
+      } catch (error) {
+        if (attempt !== connectAttempt) return;
+
+        setStatus(error.message || "connection failed");
+        closeConnection();
+        scheduleReconnect();
+      }
+    }
+
+    async function pollCameraState() {
+      try {
+        const cameraState = await getJson("/camera-state");
+
+        if (!cameraState.online && (!pc || pc.connectionState !== "connected")) {
+          setStatus(cameraState.status || "offline");
+        }
+      } catch {
+        // Keep OBS source quiet; reconnect loop will handle it.
+      }
+    }
+
+    connect();
+    stateTimer = setInterval(pollCameraState, 2500);
+    window.addEventListener("beforeunload", () => {
+      clearInterval(stateTimer);
+      closeConnection();
+    });
+  </script>
+</body>
+</html>

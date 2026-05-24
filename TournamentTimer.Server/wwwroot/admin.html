@@ -1,0 +1,2193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TournamentTimer Admin</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px;
+      background: #0b0d12;
+      color: #f4f4f5;
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      font-size: 34px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .card {
+      background: #151923;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+
+    .label {
+      opacity: .65;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 6px;
+    }
+
+    .value {
+      font-size: 22px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .ok {
+      color: #8cffb3;
+    }
+
+    .bad {
+      color: #ff9f9f;
+    }
+
+    .muted {
+      opacity: .6;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .url-row,
+    .runner-admin-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .runner-admin-controls button,
+    .runner-admin-controls a.button {
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+
+    .runner-overlay-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .camera-hint {
+      margin-top: 8px;
+      color: rgba(244,244,245,.58);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .runner-overlay-row {
+      display: grid;
+      grid-template-columns: 120px 1fr auto auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .runner-overlay-name {
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 720px) {
+      .runner-overlay-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .runner-admin-mode {
+      margin-top: 10px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      opacity: .72;
+    }
+
+
+    .command-label {
+      width: 170px;
+      opacity: .72;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .command-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .url-value,
+    .command-value {
+      flex: 1;
+      background: #090b10;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .access-card,
+    .settings-card,
+    .assets-card,
+    .camera-card,
+    .runners-card,
+    .splits-card,
+    .results-card,
+    .command-box {
+      margin-top: 16px;
+    }
+
+    .assets-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 10px 0 8px;
+    }
+
+    .asset-pill {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .asset-pill strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 16px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .settings-hint {
+      margin-top: 10px;
+      font-size: 13px;
+      opacity: .68;
+      line-height: 1.4;
+    }
+
+    .runners-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .runner-card {
+      background: #0f121a;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+      .runner-card.admin-control {
+          border-color: rgba(255, 193, 7, .55);
+          box-shadow: 0 0 0 1px rgba(255, 193, 7, .15);
+      }
+
+      .runner-card.input-locked {
+          border-color: rgba(255, 96, 96, .95);
+          box-shadow: 0 0 0 1px rgba(255, 96, 96, .35), 0 0 24px rgba(255, 64, 64, .18);
+      }
+
+      .runner-lock-warning {
+          margin-top: 12px;
+          background: rgba(168, 50, 50, .18);
+          border: 1px solid rgba(255, 96, 96, .75);
+          border-radius: 12px;
+          padding: 12px;
+          color: #ffd0d0;
+      }
+
+      .runner-lock-warning-title {
+          color: #ff7b7b;
+          font-weight: 900;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          margin-bottom: 6px;
+      }
+
+      .runner-lock-warning-reason {
+          font-family: Consolas, monospace;
+          font-size: 13px;
+          overflow-wrap: anywhere;
+      }
+
+      .runner-lock-warning-meta {
+          margin-top: 6px;
+          font-size: 12px;
+          opacity: .8;
+          overflow-wrap: anywhere;
+      }
+
+    .runner-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .runner-title {
+      font-size: 20px;
+      font-weight: 800;
+      word-break: break-word;
+    }
+
+    .runner-client {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      margin-top: 3px;
+      word-break: break-word;
+    }
+
+    .runner-pill {
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 800;
+      background: rgba(255,255,255,.08);
+      white-space: nowrap;
+    }
+
+    .runner-timer {
+      font-size: 42px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -1px;
+      margin-bottom: 14px;
+    }
+
+    .runner-timer-stack {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .timer-box {
+      background: rgba(255,255,255,.04);
+      border-radius: 10px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .timer-box span {
+      display: block;
+      opacity: .58;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+
+    .timer-box strong {
+      display: block;
+      font-family: Consolas, monospace;
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    .timer-delta-warn {
+      color: #ffd37a;
+    }
+
+    .timer-delta-bad {
+      color: #ff9f9f;
+    }
+
+    .key-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .key-grid label span {
+      display: block;
+      opacity: .7;
+      font-size: 13px;
+      margin-bottom: 5px;
+    }
+
+    .key-grid input {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
+    .runner-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .runner-detail {
+      background: rgba(255,255,255,.04);
+      border-radius: 10px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .runner-detail span {
+      display: block;
+      opacity: .58;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+
+    .runner-detail strong {
+      display: block;
+      font-size: 15px;
+      overflow-wrap: anywhere;
+    }
+
+    .split-table-wrap {
+      margin-top: 12px;
+      max-height: 520px;
+      overflow: auto;
+      border-radius: 12px;
+    }
+
+    .split-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 560px;
+      font-size: 14px;
+    }
+
+    .split-table th,
+    .split-table td {
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .split-table th {
+      opacity: .92;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #151923;
+    }
+
+    .split-name {
+      font-weight: 800;
+      min-width: 180px;
+    }
+
+    .split-cell {
+      font-family: Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    .split-current {
+      background: rgba(47,107,255,.14);
+    }
+
+    .split-done {
+      color: #8cffb3;
+    }
+
+    .split-next {
+      color: #9fc0ff;
+      font-weight: 800;
+    }
+
+    .split-pending {
+      opacity: .55;
+    }
+
+    .delta {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      opacity: .9;
+    }
+
+    .delta-leader {
+      color: #8cffb3;
+    }
+
+    .delta-behind {
+      color: #ffcf8c;
+    }
+
+    .delta-ahead {
+      color: #9fc0ff;
+    }
+
+    .delta-live {
+      color: #ffcf8c;
+      opacity: .92;
+    }
+
+    .gap-stack {
+      display: grid;
+      gap: 3px;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .gap-line-label {
+      opacity: .62;
+      margin-right: 5px;
+      font-weight: 700;
+    }
+
+
+    .run-id-control {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .run-id-control span {
+      opacity: .72;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 700;
+    }
+    input,
+    select {
+      background: #0f121a;
+      color: white;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 16px;
+      min-width: 260px;
+    }
+
+    select {
+      min-width: 120px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+
+    button, a.button {
+      background: #2f6bff;
+      color: white;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    button.small {
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+
+    button.danger {
+      background: #a83232;
+    }
+
+    button.secondary, a.secondary {
+      background: #2a3040;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .log {
+      margin-top: 20px;
+      padding: 14px;
+      background: #090b10;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px;
+      font-family: Consolas, monospace;
+      font-size: 14px;
+      min-height: 60px;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 18px;
+      }
+
+      .grid,
+      .runner-details {
+        grid-template-columns: 1fr;
+      }
+
+      .runner-timer {
+        font-size: 36px;
+      }
+
+      .command-row,
+      .url-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+      <h1>TournamentTimer Admin</h1>
+
+    <div class="controls">
+      <label class="run-id-control"><span>Run ID</span><input id="runIdInput" /></label>
+      <button id="loadBtn">Load run on server</button>
+      <a id="overlayLink" class="button secondary" href="/overlay.html?runId=local-test-run" target="_blank">Open overlay</a>
+      <button id="newAttemptBtn" class="secondary">New attempt</button>
+      <button id="resetBtn" class="danger">Reset server only</button>
+    </div>
+
+    <div class="card access-card">
+      <div class="label">Access keys</div>
+      <div class="key-grid">
+        <label><span>Admin key</span><input id="adminKeyInput" type="password" autocomplete="off" placeholder="for admin actions" /></label>
+        <label><span>Run key</span><input id="runKeyInput" type="password" autocomplete="off" placeholder="for runner clients" /></label>
+        <label><span>View key</span><input id="viewKeyInput" type="password" autocomplete="off" placeholder="for overlay / viewing" /></label>
+      </div>
+    </div>
+
+    <div class="card settings-card">
+      <div class="label">Server / settings check</div>
+      <div id="serverInfoSummary" class="assets-summary">
+        <div class="asset-pill muted">Loading server info...</div>
+      </div>
+      <div class="settings-hint">timer-settings.json is read when the server/scripts start. If you change runId or keys in the file, restart the server and restart runner clients.</div>
+    </div>
+
+    <div class="grid" style="margin-top: 20px;">
+      <div class="card">
+        <div class="label">Run</div>
+        <div id="runMeta" class="value">Loading...</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Match status</div>
+        <div id="status" class="value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Attempt</div>
+        <div id="attempt" class="value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Runners</div>
+        <div id="runnerSummary" class="value">-</div>
+      </div>
+
+      <div class="card wide">
+        <div class="label">Overlay URL</div>
+        <div class="url-row">
+          <div id="overlayUrl" class="url-value muted">-</div>
+          <button id="copyOverlayBtn" class="secondary small">Copy</button>
+        </div>
+
+        <div class="label" style="margin-top: 16px;">Runner overlay URLs</div>
+        <div id="runnerOverlayUrls" class="runner-overlay-list">
+          <div class="muted">Runner overlay buttons will appear after state load.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card assets-card">
+      <div class="label">LiveSplit assets</div>
+
+      <div id="assetSummary" class="assets-summary">
+        <div class="asset-pill muted">Loading assets...</div>
+      </div>
+
+      <div class="url-row">
+        <div id="splitsUrl" class="url-value muted">No splits.lss asset.</div>
+        <button id="copySplitsUrlBtn" class="secondary small">Copy splits URL</button>
+      </div>
+
+      <div class="url-row">
+        <div id="autosplitterUrl" class="url-value muted">No autosplitter asset.</div>
+        <button id="copyAutosplitterUrlBtn" class="secondary small">Copy autosplitter URL</button>
+      </div>
+    </div>
+
+    <div class="card camera-card">
+      <div class="label">Camera sources for OBS</div>
+      <div class="camera-hint">
+        OBS URLs are clean camera sources and are generated from the address used to open this admin page. If they show localhost, open admin through the real server address before copying for OBS.
+      </div>
+      <div id="cameraSourcesList" class="runner-overlay-list">
+        <div class="muted">Camera source URLs will appear after state load.</div>
+      </div>
+    </div>
+
+    <div class="card runners-card">
+      <div class="label">Runner timers</div>
+      <div id="runnersGrid" class="runners-grid">
+        <div class="muted">No runners connected yet.</div>
+      </div>
+    </div>
+
+    <div class="card splits-card">
+      <div class="label">Split table</div>
+      <div id="splitTableWrap" class="split-table-wrap">
+        <div class="muted">Connect runners and load config to show split progress.</div>
+      </div>
+    </div>
+
+    <div class="card results-card">
+      <div class="label">Final results / timing audit</div>
+      <div id="resultsTableWrap" class="split-table-wrap">
+        <div class="muted">Results will appear here during and after the run.</div>
+      </div>
+    </div>
+
+    <div class="card command-box">
+      <div class="label">Commands · using timer-settings.json</div>
+
+      <div class="command-row">
+        <div class="command-label">Start server</div>
+        <div id="serverCommand" class="command-value">-</div>
+        <button id="copyServerCommandBtn" class="secondary small">Copy</button>
+      </div>
+
+      <div class="command-row">
+        <div class="command-label">Start runner-1</div>
+        <div id="runner1Command" class="command-value">-</div>
+        <button id="copyRunner1CommandBtn" class="secondary small">Copy</button>
+      </div>
+
+      <div class="command-row">
+        <div class="command-label">Start runner-2</div>
+        <div id="runner2Command" class="command-value">-</div>
+        <button id="copyRunner2CommandBtn" class="secondary small">Copy</button>
+      </div>
+
+      <div class="command-row">
+        <div class="command-label">Open admin</div>
+        <div id="adminCommand" class="command-value">-</div>
+        <button id="copyAdminCommandBtn" class="secondary small">Copy</button>
+      </div>
+    </div>
+
+    <div id="log" class="log">Ready.</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    let runId = params.get("runId") || "";
+
+    const runIdInput = document.getElementById("runIdInput");
+    const adminKeyInput = document.getElementById("adminKeyInput");
+    const runKeyInput = document.getElementById("runKeyInput");
+    const viewKeyInput = document.getElementById("viewKeyInput");
+    const loadBtn = document.getElementById("loadBtn");
+    const overlayLink = document.getElementById("overlayLink");
+    const newAttemptBtn = document.getElementById("newAttemptBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const overlayUrlEl = document.getElementById("overlayUrl");
+    const runnerOverlayUrlsEl = document.getElementById("runnerOverlayUrls");
+    const cameraSourcesListEl = document.getElementById("cameraSourcesList");
+    const copyOverlayBtn = document.getElementById("copyOverlayBtn");
+
+    const runMetaEl = document.getElementById("runMeta");
+    const statusEl = document.getElementById("status");
+    const attemptEl = document.getElementById("attempt");
+    const runnerSummaryEl = document.getElementById("runnerSummary");
+    const runnersGridEl = document.getElementById("runnersGrid");
+    const splitTableWrapEl = document.getElementById("splitTableWrap");
+    const resultsTableWrapEl = document.getElementById("resultsTableWrap");
+    const logEl = document.getElementById("log");
+
+    const assetSummaryEl = document.getElementById("assetSummary");
+    const splitsUrlEl = document.getElementById("splitsUrl");
+    const autosplitterUrlEl = document.getElementById("autosplitterUrl");
+    const copySplitsUrlBtn = document.getElementById("copySplitsUrlBtn");
+    const copyAutosplitterUrlBtn = document.getElementById("copyAutosplitterUrlBtn");
+
+    const serverCommandEl = document.getElementById("serverCommand");
+    const runner1CommandEl = document.getElementById("runner1Command");
+    const runner2CommandEl = document.getElementById("runner2Command");
+    const adminCommandEl = document.getElementById("adminCommand");
+    const serverInfoSummaryEl = document.getElementById("serverInfoSummary");
+
+    const copyServerCommandBtn = document.getElementById("copyServerCommandBtn");
+    const copyRunner1CommandBtn = document.getElementById("copyRunner1CommandBtn");
+    const copyRunner2CommandBtn = document.getElementById("copyRunner2CommandBtn");
+    const copyAdminCommandBtn = document.getElementById("copyAdminCommandBtn");
+
+    let lastState = null;
+    let runConfig = null;
+    let runAssets = null;
+    let serverInfo = null;
+    let runnerAnchors = new Map();
+
+    let wasPollOffline = false;
+    let lastPollErrorLogAt = 0;
+
+    let adminActionInProgress = false;
+    let newAttemptCooldownUntil = 0;
+
+    adminKeyInput.value = params.get("adminKey") || localStorage.getItem("tt.adminKey") || "";
+    runKeyInput.value = params.get("runKey") || localStorage.getItem("tt.runKey") || "";
+    viewKeyInput.value = params.get("viewKey") || localStorage.getItem("tt.viewKey") || "";
+
+    for (const input of [adminKeyInput, runKeyInput, viewKeyInput]) {
+      input.addEventListener("change", () => {
+        localStorage.setItem("tt.adminKey", adminKeyInput.value.trim());
+        localStorage.setItem("tt.runKey", runKeyInput.value.trim());
+        localStorage.setItem("tt.viewKey", viewKeyInput.value.trim());
+        updateOverlayLink();
+        updateCommands();
+        pollState();
+      });
+    }
+
+    runIdInput.value = runId;
+    runIdInput.placeholder = "e.g. re9";
+    runIdInput.title = "Loads configs/<Run ID>.json on the server.";
+    updateOverlayLink();
+    updateCommands();
+
+    function log(message) {
+      const time = new Date().toLocaleTimeString();
+      logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+    }
+
+    function getAdminKey() { return adminKeyInput.value.trim(); }
+    function getRunKey() { return runKeyInput.value.trim(); }
+    function getViewKey() { return viewKeyInput.value.trim(); }
+
+    function withQuery(url, name, value) {
+      if (!value) { return url; }
+      const parsed = new URL(url, window.location.origin);
+      parsed.searchParams.set(name, value);
+      return parsed.toString();
+    }
+
+    function accessHeaders(mode) {
+      const headers = {};
+      const adminKey = getAdminKey();
+      const runKey = getRunKey();
+      const viewKey = getViewKey();
+
+      if (mode === "admin" && adminKey) { headers["X-Admin-Key"] = adminKey; }
+      if (mode === "run" && runKey) { headers["X-Run-Key"] = runKey; }
+      if (mode === "view" && viewKey) { headers["X-View-Key"] = viewKey; }
+
+      if (mode === "read") {
+        if (adminKey) { headers["X-Admin-Key"] = adminKey; }
+        if (runKey) { headers["X-Run-Key"] = runKey; }
+        if (viewKey) { headers["X-View-Key"] = viewKey; }
+      }
+
+      return headers;
+    }
+
+    function getOverlayUrl() {
+      return withQuery(`${window.location.origin}/overlay.html?runId=${encodeURIComponent(runId)}`, "viewKey", getViewKey());
+    }
+
+    function getRunnerOverlayUrl(runnerId) {
+      const base = `${window.location.origin}/overlay.html?runId=${encodeURIComponent(runId)}&runnerId=${encodeURIComponent(runnerId)}`;
+      return withQuery(base, "viewKey", getViewKey());
+    }
+
+    function getCameraFit() {
+      return "cover";
+    }
+
+    function getRunnerCameraUrl(runnerId, options = {}) {
+      const status = options.status ? "1" : "0";
+      const fit = options.fit || getCameraFit();
+      const base = `${window.location.origin}/camera-source.html?runId=${encodeURIComponent(runId)}&runnerId=${encodeURIComponent(runnerId)}&fit=${encodeURIComponent(fit)}&status=${status}`;
+      return withQuery(base, "viewKey", getViewKey());
+    }
+
+    function getRunnerCameraPreviewUrl(runnerId) {
+      return getRunnerCameraUrl(runnerId, { status: true, fit: getCameraFit() });
+    }
+
+    function getRunnerCameraStatus(runnerId, runners = []) {
+      const runner = (runners || []).find(item => (item.runnerId || "runner-1") === runnerId);
+
+      if (!runner) {
+        return "unknown";
+      }
+
+      if (runner.cameraOnline) {
+        const viewers = runner.cameraViewerCount || 0;
+        return `online${viewers ? ` / ${viewers} viewer${viewers === 1 ? "" : "s"}` : ""}`;
+      }
+
+      return runner.cameraStatus || "offline";
+    }
+
+    function renderCameraSources(runners = []) {
+      const runnerIds = getKnownRunnerIds(runners);
+
+      cameraSourcesListEl.innerHTML = runnerIds.map(runnerId => {
+        const url = getRunnerCameraUrl(runnerId);
+        const status = getRunnerCameraStatus(runnerId, runners);
+        const online = status.startsWith("online");
+
+        return `
+          <div class="runner-overlay-row">
+            <div class="runner-overlay-name">${escapeHtml(runnerId)}</div>
+            <div class="url-value">${escapeHtml(url)}</div>
+            <span class="runner-pill ${online ? "ok" : "bad"}">${escapeHtml(status)}</span>
+            <a class="button secondary small" href="${escapeHtml(getRunnerCameraPreviewUrl(runnerId))}" target="_blank">Preview</a>
+            <button class="secondary small" onclick="copyRunnerCameraUrl('${escapeJs(runnerId)}')">Copy</button>
+          </div>`;
+      }).join("");
+    }
+
+    function getKnownRunnerIds(runners = []) {
+      const ids = new Set(["runner-1", "runner-2"]);
+
+      for (const runner of runners || []) {
+        const runnerId = runner.runnerId || "runner-1";
+
+        if (runnerId) {
+          ids.add(runnerId);
+        }
+      }
+
+      return [...ids].sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }));
+    }
+
+    function renderRunnerOverlayUrls(runners = []) {
+      const runnerIds = getKnownRunnerIds(runners);
+
+      runnerOverlayUrlsEl.innerHTML = runnerIds.map(runnerId => {
+        const url = getRunnerOverlayUrl(runnerId);
+
+        return `
+          <div class="runner-overlay-row">
+            <div class="runner-overlay-name">${escapeHtml(runnerId)}</div>
+            <div class="url-value">${escapeHtml(url)}</div>
+            <a class="button secondary small" href="${escapeHtml(url)}" target="_blank">Open</a>
+            <button class="secondary small" onclick="copyRunnerOverlayUrl('${escapeJs(runnerId)}')">Copy</button>
+          </div>`;
+      }).join("");
+    }
+
+    function updateOverlayLink() {
+      const url = getOverlayUrl();
+
+      overlayLink.href = url;
+      overlayUrlEl.textContent = url;
+      const runners = lastState ? getRunners(lastState) : [];
+      renderRunnerOverlayUrls(runners);
+      renderCameraSources(runners);
+    }
+
+    function psArg(value) {
+      return `'${String(value ?? "").replaceAll("'", "''")}'`;
+    }
+
+    function updateCommands() {
+      const settingsPath = ".\\timer-settings.json";
+      const settingsArg = ` -SettingsPath ${psArg(settingsPath)}`;
+
+      serverCommandEl.textContent = `powershell -ExecutionPolicy Bypass -File .\\scripts\\start-server.ps1${settingsArg}`;
+      runner1CommandEl.textContent = `powershell -ExecutionPolicy Bypass -File .\\scripts\\start-runner.ps1${settingsArg} -RunnerId runner-1`;
+      runner2CommandEl.textContent = `powershell -ExecutionPolicy Bypass -File .\\scripts\\start-runner.ps1${settingsArg} -RunnerId runner-2`;
+      adminCommandEl.textContent = `powershell -ExecutionPolicy Bypass -File .\\scripts\\open-admin.ps1${settingsArg}`;
+    }
+
+    function formatMs(ms) {
+      ms = Math.max(0, Math.floor(ms || 0));
+
+      const totalSeconds = Math.floor(ms / 1000);
+      const milliseconds = ms % 1000;
+      const seconds = totalSeconds % 60;
+      const minutes = Math.floor(totalSeconds / 60) % 60;
+      const hours = Math.floor(totalSeconds / 3600);
+
+      const msText = String(milliseconds).padStart(3, "0");
+      const secText = String(seconds).padStart(2, "0");
+
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${secText}.${msText}`;
+      }
+
+      return `${minutes}:${secText}.${msText}`;
+    }
+
+    function formatSignedMs(ms) {
+      const value = Math.floor(ms || 0);
+      const sign = value > 0 ? "+" : value < 0 ? "-" : "±";
+      return sign + formatMs(Math.abs(value));
+    }
+
+    function deltaClass(ms) {
+      const abs = Math.abs(ms || 0);
+      if (abs > 2000) { return "timer-delta-bad"; }
+      if (abs > 500) { return "timer-delta-warn"; }
+      return "";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeJs(value) {
+      return String(value ?? "")
+        .replaceAll("\\", "\\\\")
+        .replaceAll("'", "\\'")
+        .replaceAll("\n", "\\n")
+        .replaceAll("\r", "\\r");
+    }
+
+    function toDomId(value) {
+      return String(value || "runner")
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
+
+    function getRunners(state) {
+      if (Array.isArray(state?.runners)) {
+        return state.runners;
+      }
+
+      if (!state) {
+        return [];
+      }
+
+      return [{
+        runnerId: "runner-1",
+        clientId: state.runnerClientId,
+        connected: state.runnerConnected,
+        lastHeartbeatAtUtc: state.lastRunnerHeartbeatAtUtc,
+        status: state.status,
+        displayElapsedMs: state.displayElapsedMs,
+        displayElapsed: state.displayElapsed,
+        clientElapsedMs: state.clientElapsedMs ?? state.displayElapsedMs,
+        clientElapsed: state.clientElapsed ?? state.displayElapsed,
+        serverElapsedMs: state.serverElapsedMs ?? state.displayElapsedMs,
+        serverElapsed: state.serverElapsed ?? state.displayElapsed,
+        timerDeltaMs: state.timerDeltaMs ?? 0,
+        timerDelta: state.timerDelta ?? "±0:00.000",
+        lastCompletedSplitIndex: state.lastCompletedSplitIndex,
+        currentSplitName: state.currentSplitName,
+        completedSplits: state.completedSplits || [],
+        finishedAtMs: state.finishedAtMs,
+        finishedAt: state.finishedAt
+      }];
+    }
+
+    function currentRunnerDisplayMs(runnerId, mode = "client") {
+      const anchor = runnerAnchors.get(runnerId);
+
+      if (!anchor) {
+        return 0;
+      }
+
+      const base = mode === "server" ? anchor.serverElapsedMs : anchor.clientElapsedMs;
+
+      if (anchor.status !== "Running") {
+        return base;
+      }
+
+      return base + (performance.now() - anchor.performanceMs);
+    }
+
+    function updateRunnerAnchors(runners) {
+      const activeIds = new Set();
+      const now = performance.now();
+
+      for (const runner of runners) {
+        const runnerId = runner.runnerId || "runner-1";
+        activeIds.add(runnerId);
+
+        runnerAnchors.set(runnerId, {
+          status: runner.status || "Ready",
+          elapsedMs: runner.displayElapsedMs || 0,
+          clientElapsedMs: runner.clientElapsedMs ?? runner.displayElapsedMs ?? 0,
+          serverElapsedMs: runner.serverElapsedMs ?? runner.displayElapsedMs ?? 0,
+          performanceMs: now
+        });
+      }
+
+      for (const runnerId of Array.from(runnerAnchors.keys())) {
+        if (!activeIds.has(runnerId)) {
+          runnerAnchors.delete(runnerId);
+        }
+      }
+    }
+
+    function renderRunnerCards(runners) {
+      if (!runners.length) {
+        runnersGridEl.innerHTML = '<div class="muted">No runners connected yet.</div>';
+        return;
+      }
+
+      runnersGridEl.innerHTML = runners.map(runner => {
+        const runnerId = runner.runnerId || "runner-1";
+        const domId = toDomId(runnerId);
+        const connectedText = runner.connected ? "Connected" : "Disconnected";
+        const connectionClass = runner.connected ? "ok" : "bad";
+        const statusClass = runner.status === "Finished" ? "ok" : "";
+        const inputLocked = Boolean(runner.inputLocked || runner.inputLockReason);
+        const cardClass = inputLocked
+          ? "runner-card input-locked"
+          : runner.adminControlMode
+            ? "runner-card admin-control"
+            : "runner-card";
+
+        const adminModeText = inputLocked
+          ? " / LIVE SPLIT INPUT LOCKED"
+          : runner.adminControlMode
+            ? " / ADMIN CONTROL"
+            : "";
+
+        const inputLockedAt = runner.inputLockedAtUtc
+          ? new Date(runner.inputLockedAtUtc).toLocaleString()
+          : "-";
+
+        const lockWarningHtml = inputLocked
+          ? `
+            <div class="runner-lock-warning">
+              <div class="runner-lock-warning-title">LiveSplit input locked</div>
+              <div class="runner-lock-warning-reason">${escapeHtml(runner.inputLockReason || "unknown_reason")}</div>
+              <div class="runner-lock-warning-meta">source: ${escapeHtml(runner.inputLockSource || "-")}</div>
+              <div class="runner-lock-warning-meta">event: ${escapeHtml(runner.inputLockSourceEventId || "-")}</div>
+              <div class="runner-lock-warning-meta">locked at: ${escapeHtml(inputLockedAt)}</div>
+            </div>`
+          : "";
+        const splitText = runner.status === "Ready"
+          ? "Waiting for start"
+          : runner.status === "Finished"
+            ? "Finished"
+            : (runner.currentSplitName || "Running");
+
+        return `
+          <div class="${cardClass}">
+            <div class="runner-header">
+              <div>
+                <div class="runner-title">${escapeHtml(runnerId)}</div>
+                <div class="runner-client muted">${escapeHtml(runner.clientId || "no client")}</div>
+              </div>
+              <div class="runner-pill ${connectionClass}">${connectedText}</div>
+            </div>
+
+            <div class="runner-timer-stack">
+              <div class="timer-box">
+                <span>Client</span>
+                <strong id="runnerClientTimer-${domId}">${formatMs(runner.clientElapsedMs ?? runner.displayElapsedMs)}</strong>
+              </div>
+              <div class="timer-box">
+                <span>Server</span>
+                <strong id="runnerServerTimer-${domId}">${formatMs(runner.serverElapsedMs ?? runner.displayElapsedMs)}</strong>
+              </div>
+              <div class="timer-box">
+                <span>Delta</span>
+                <strong id="runnerDelta-${domId}" class="${deltaClass(runner.timerDeltaMs)}">${escapeHtml(runner.timerDelta || formatSignedMs(runner.timerDeltaMs || 0))}</strong>
+              </div>
+            </div>
+
+            <div class="runner-details">
+              <div class="runner-detail">
+                <span>Status</span>
+                <strong class="${statusClass}">${escapeHtml(runner.status || "-")}</strong>
+              </div>
+              <div class="runner-detail">
+                <span>Current split</span>
+                <strong>${escapeHtml(splitText)}</strong>
+              </div>
+              <div class="runner-detail">
+                <span>Last split index</span>
+                <strong>${runner.lastCompletedSplitIndex ?? "-"}</strong>
+              </div>
+              <div class="runner-detail">
+                <span>Finished client / server</span>
+                <strong>${escapeHtml(runner.finishedAt || "-")}${runner.serverFinishedAt ? ` / ${escapeHtml(runner.serverFinishedAt)}` : ""}</strong>
+              </div>
+              <div class="runner-detail">
+                <span>Overall</span>
+                <strong>${renderDeltaHtml(getOverallGap(runner, runners))}</strong>
+              </div>
+              <div class="runner-detail">
+                <span>Split gap</span>
+                <strong>${renderDeltaHtml(getRunnerGap(runner, runners))}</strong>
+              </div>
+            </div>
+
+            <div class="runner-admin-mode">
+              state v${escapeHtml(runner.stateVersion ?? 0)}${adminModeText}
+            </div>
+
+            ${lockWarningHtml}
+
+            <div class="runner-admin-controls">
+              <a class="button secondary small" href="${escapeHtml(getRunnerOverlayUrl(runnerId))}" target="_blank">Open overlay</a>
+              <button class="secondary small" onclick="copyRunnerOverlayUrl('${escapeJs(runnerId)}')">Copy overlay</button>
+            </div>
+
+            <div class="runner-admin-controls">
+              <button class="secondary small" onclick="adminRunnerAction('${escapeJs(runnerId)}', 'start')">Admin Start</button>
+              <button class="secondary small" onclick="adminRunnerAction('${escapeJs(runnerId)}', 'split')">Admin Split</button>
+              <button class="secondary small" onclick="adminRunnerAction('${escapeJs(runnerId)}', 'undo')">Undo</button>
+              <button class="danger small" onclick="adminRunnerAction('${escapeJs(runnerId)}', 'finish')">Finish</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function describeHttpError(status, details, label) {
+      const serverError = details?.error || details?.message || "";
+
+      if (status === 401) {
+        return `${label}: 401 — wrong or missing access key${serverError ? ` (${serverError})` : ""}`;
+      }
+
+      if (status === 404) {
+        return `${label}: 404 — runId not found or wrong URL${serverError ? ` (${serverError})` : ""}`;
+      }
+
+      if (status === 400) {
+        return `${label}: 400 — bad request${serverError ? ` (${serverError})` : ""}`;
+      }
+
+      if (status === 409) {
+        return `${label}: 409 — action is on cooldown or conflicts with current state${serverError ? ` (${serverError})` : ""}`;
+      }
+
+      if (status >= 500) {
+        return `${label}: ${status} — server error${serverError ? ` (${serverError})` : ""}`;
+      }
+
+      return `${label}: HTTP ${status}${serverError ? ` (${serverError})` : ""}`;
+    }
+
+    async function readErrorPayload(response) {
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        return await response.json().catch(() => null);
+      }
+
+      const text = await response.text().catch(() => "");
+      return text ? { message: text.slice(0, 240) } : null;
+    }
+
+    async function fetchJson(url, options = {}, label = "Request") {
+      let response;
+
+      try {
+        response = await fetch(url, options);
+      } catch (error) {
+        const wrapped = new Error(`${label}: server offline or wrong server URL (${error.message})`);
+        wrapped.status = 0;
+        throw wrapped;
+      }
+
+      if (!response.ok) {
+        const details = await readErrorPayload(response);
+        const error = new Error(describeHttpError(response.status, details, label));
+        error.status = response.status;
+        error.details = details;
+        throw error;
+      }
+
+      return await response.json();
+    }
+
+    async function loadServerInfo() {
+      serverInfo = await fetchJson("/api/server-info", {
+        cache: "no-store",
+        headers: accessHeaders("read")
+      }, "Server info");
+
+      if (!runId && serverInfo.activeRunId) {
+        runId = serverInfo.activeRunId;
+        runIdInput.value = runId;
+        updateOverlayLink();
+        updateCommands();
+      }
+
+      renderServerInfo();
+      return serverInfo;
+    }
+
+    function renderServerInfo() {
+      if (!serverInfo) {
+        serverInfoSummaryEl.innerHTML = '<div class="asset-pill muted">No server info.</div>';
+        return;
+      }
+
+      const activeMatchesInput = String(serverInfo.activeRunId || "").toLowerCase() === String(runId || "").toLowerCase();
+      const keys = serverInfo.accessKeys || {};
+      const keyStatus = `admin=${keys.admin ? "on" : "off"}, run=${keys.run ? "on" : "off"}, view=${keys.view ? "on" : "off"}`;
+
+      serverInfoSummaryEl.innerHTML = `
+        <div class="asset-pill">
+          Active runId
+          <strong class="${activeMatchesInput ? "ok" : "bad"}">${escapeHtml(serverInfo.activeRunId || "-")}</strong>
+        </div>
+        <div class="asset-pill">
+          Page runId
+          <strong class="${activeMatchesInput ? "ok" : "bad"}">${escapeHtml(runId || "-")}</strong>
+        </div>
+        <div class="asset-pill">
+          Config
+          <strong>${escapeHtml(serverInfo.configPath || "-")}</strong>
+        </div>
+        <div class="asset-pill">
+          Assets root
+          <strong>${escapeHtml(serverInfo.assetsRoot || "-")}</strong>
+        </div>
+        <div class="asset-pill">
+          Keys
+          <strong class="${keys.admin && keys.run && keys.view ? "ok" : "muted"}">${escapeHtml(keyStatus)}</strong>
+        </div>
+        <div class="asset-pill">
+          Game / category
+          <strong>${escapeHtml(`${serverInfo.game || "?"} — ${serverInfo.category || "?"}`)}</strong>
+        </div>
+        <div class="asset-pill">
+          Splits
+          <strong>${escapeHtml(serverInfo.splitCount ?? "-")}</strong>
+        </div>`;
+    }
+
+    async function loadRunConfig(force = false) {
+      if (runConfig && !force) {
+        return runConfig;
+      }
+
+      runConfig = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`, {
+        cache: "no-store",
+        headers: accessHeaders("read")
+      }, "Run config");
+
+      return runConfig;
+    }
+
+    async function loadRunAssets(force = false) {
+      if (runAssets && !force) {
+        return runAssets;
+      }
+
+      try {
+        runAssets = await fetchJson(`/api/runs/${encodeURIComponent(runId)}/assets`, {
+          cache: "no-store",
+          headers: accessHeaders("read")
+        }, "Assets");
+
+        return runAssets;
+      } catch (error) {
+        runAssets = {
+          runId,
+          hasSplits: false,
+          splitsFileName: null,
+          splitsUrl: null,
+          splitCount: Array.isArray(runConfig?.splits) ? runConfig.splits.length : 0,
+          splitSource: "assets endpoint unavailable",
+          hasAutosplitter: false,
+          autosplitterFileName: null,
+          autosplitterUrl: null
+        };
+
+        log(`Assets unavailable: ${error.message}`);
+        return runAssets;
+      }
+    }
+
+    function renderAssets() {
+      const assets = runAssets;
+
+      if (!assets) {
+        assetSummaryEl.innerHTML = '<div class="asset-pill muted">No asset data.</div>';
+        splitsUrlEl.textContent = "No splits.lss asset.";
+        autosplitterUrlEl.textContent = "No autosplitter asset.";
+        return;
+      }
+
+      assetSummaryEl.innerHTML = `
+        <div class="asset-pill">
+          Splits source
+          <strong class="${assets.hasSplits ? "ok" : "muted"}">${escapeHtml(assets.splitSource || "config")}</strong>
+        </div>
+        <div class="asset-pill">
+          Splits file
+          <strong class="${assets.hasSplits ? "ok" : "muted"}">${escapeHtml(assets.splitsFileName || "none")}</strong>
+        </div>
+        <div class="asset-pill">
+          Split count
+          <strong>${escapeHtml(assets.splitCount ?? "-")}</strong>
+        </div>
+        <div class="asset-pill">
+          Autosplitter
+          <strong class="${assets.hasAutosplitter ? "ok" : "muted"}">${escapeHtml(assets.autosplitterFileName || "none")}</strong>
+        </div>`;
+
+      splitsUrlEl.textContent = assets.splitsUrl ? withQuery(assets.splitsUrl, "runKey", getRunKey() || getViewKey()) : "No splits.lss asset.";
+      splitsUrlEl.classList.toggle("muted", !assets.splitsUrl);
+
+      autosplitterUrlEl.textContent = assets.autosplitterUrl ? withQuery(assets.autosplitterUrl, "runKey", getRunKey() || getViewKey()) : "No autosplitter asset.";
+      autosplitterUrlEl.classList.toggle("muted", !assets.autosplitterUrl);
+    }
+
+    function getConfiguredSplits() {
+      const splits = Array.isArray(runConfig?.splits)
+        ? runConfig.splits
+        : [];
+
+      return splits
+        .map((split, index) => ({
+          index: Number.isInteger(split.index) ? split.index : index,
+          name: split.name || `Split ${index + 1}`
+        }))
+        .sort((left, right) => left.index - right.index);
+    }
+
+    function getCompletedSplitMap(runner) {
+      const map = new Map();
+
+      for (const split of runner.completedSplits || []) {
+        map.set(split.splitIndex, split);
+      }
+
+      return map;
+    }
+
+    function getCompletedSplit(runner, splitIndex) {
+      return getCompletedSplitMap(runner).get(splitIndex) || null;
+    }
+
+    function getRunnerLiveMs(runner) {
+      return currentRunnerDisplayMs(runner.runnerId || "runner-1");
+    }
+
+    function getRunnerProgressIndex(runner) {
+      if (!runner || runner.status === "Ready") {
+        return -1;
+      }
+
+      if (runner.status === "Finished") {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      return (runner.lastCompletedSplitIndex ?? -1) + 1;
+    }
+
+    function getCompletedSplit(runner, splitIndex) {
+      return getCompletedSplitMap(runner).get(splitIndex) || null;
+    }
+
+    function getBestCompletedTimeForSplit(runners, splitIndex) {
+      const times = [];
+
+      for (const runner of runners) {
+        const completed = getCompletedSplit(runner, splitIndex);
+
+        if (completed && Number.isFinite(Number(completed.clientElapsedMs))) {
+          times.push(Number(completed.clientElapsedMs));
+        }
+      }
+
+      return times.length ? Math.min(...times) : null;
+    }
+
+    function formatDeltaMs(deltaMs) {
+      const sign = deltaMs > 0
+        ? "+"
+        : deltaMs < 0
+          ? "−"
+          : "±";
+
+      return `${sign}${formatMs(Math.abs(deltaMs))}`;
+    }
+
+    function pluralizeSplits(count) {
+      return count === 1 ? "split" : "splits";
+    }
+
+    function getOverallGap(runner, runners) {
+      if (!runner || runners.length <= 1 || runner.status === "Ready") {
+        return null;
+      }
+
+      const activeRunners = runners.filter(other => other.status !== "Ready");
+
+      if (activeRunners.length <= 1) {
+        return null;
+      }
+
+      const leaderProgress = Math.max(...activeRunners.map(getRunnerProgressIndex));
+      const runnerProgress = getRunnerProgressIndex(runner);
+
+      if (runnerProgress < leaderProgress) {
+        const splitsBehind = leaderProgress === Number.POSITIVE_INFINITY
+          ? null
+          : leaderProgress - runnerProgress;
+
+        if (splitsBehind && splitsBehind > 0) {
+          return {
+            text: `+${splitsBehind} ${pluralizeSplits(splitsBehind)}`,
+            kind: "behind",
+            live: false
+          };
+        }
+
+        return null;
+      }
+
+      const sameProgressRunners = activeRunners
+        .filter(other => getRunnerProgressIndex(other) === runnerProgress);
+
+      const bestLiveMs = Math.min(...sameProgressRunners.map(getRunnerLiveMs));
+      const deltaMs = Math.floor(getRunnerLiveMs(runner) - bestLiveMs);
+
+      if (deltaMs <= 0) {
+        return null;
+      }
+
+      return {
+        text: formatDeltaMs(deltaMs),
+        kind: "behind",
+        live: true
+      };
+    }
+
+    function getSplitDelta(runner, splitIndex, runners) {
+      if (!runner || runners.length <= 1) {
+        return null;
+      }
+
+      const bestTime = getBestCompletedTimeForSplit(runners, splitIndex);
+
+      if (bestTime === null) {
+        return null;
+      }
+
+      const completed = getCompletedSplit(runner, splitIndex);
+
+      if (completed) {
+        const deltaMs = Number(completed.clientElapsedMs) - bestTime;
+
+        if (deltaMs <= 0) {
+          return null;
+        }
+
+        return {
+          text: formatDeltaMs(deltaMs),
+          kind: "behind",
+          live: false
+        };
+      }
+
+      const nextSplitIndex = (runner.lastCompletedSplitIndex ?? -1) + 1;
+      const isCurrent = runner.status === "Running" && nextSplitIndex === splitIndex;
+
+      if (!isCurrent) {
+        return null;
+      }
+
+      const liveDeltaMs = Math.floor(getRunnerLiveMs(runner) - bestTime);
+
+      if (liveDeltaMs <= 0) {
+        return null;
+      }
+
+      return {
+        text: `${formatDeltaMs(liveDeltaMs)} live`,
+        kind: "behind",
+        live: true
+      };
+    }
+
+    function getRunnerGap(runner, runners) {
+      if (!runner || runners.length <= 1 || runner.status === "Ready") {
+        return null;
+      }
+
+      const nextSplitIndex = (runner.lastCompletedSplitIndex ?? -1) + 1;
+
+      if (runner.status === "Running") {
+        const liveDelta = getSplitDelta(runner, nextSplitIndex, runners);
+
+        if (liveDelta) {
+          return liveDelta;
+        }
+      }
+
+      const lastCompletedSplitIndex = runner.lastCompletedSplitIndex ?? -1;
+
+      if (lastCompletedSplitIndex >= 0) {
+        return getSplitDelta(runner, lastCompletedSplitIndex, runners);
+      }
+
+      return null;
+    }
+
+    function renderDeltaHtml(delta) {
+      if (!delta) {
+        return '<span class="muted">-</span>';
+      }
+
+      const kindClass = delta.kind === "ahead"
+        ? "delta-ahead"
+        : "delta-behind";
+
+      const liveClass = delta.live ? " delta-live" : "";
+
+      return `<span class="delta ${kindClass}${liveClass}">${escapeHtml(delta.text)}</span>`;
+    }
+
+    function renderDeltaInlineHtml(delta) {
+      if (!delta) {
+        return "";
+      }
+
+      const kindClass = delta.kind === "ahead"
+        ? "delta-ahead"
+        : "delta-behind";
+
+      const liveClass = delta.live ? " delta-live" : "";
+
+      return `<span class="delta ${kindClass}${liveClass}">${escapeHtml(delta.text)}</span>`;
+    }
+
+    function renderSplitTable(state) {
+      const runners = getRunners(state);
+      const splits = getConfiguredSplits();
+
+      if (!splits.length) {
+        splitTableWrapEl.innerHTML = '<div class="muted">No splits in run config.</div>';
+        return;
+      }
+
+      if (!runners.length) {
+        splitTableWrapEl.innerHTML = '<div class="muted">No runner data.</div>';
+        return;
+      }
+
+      const runnerHeaders = runners.map(runner =>
+        `<th>${escapeHtml(runner.runnerId || "runner-1")}</th>`
+      ).join("");
+
+      const rows = splits.map(split => {
+        const cells = runners.map(runner => {
+          const completed = getCompletedSplitMap(runner).get(split.index);
+          const nextSplitIndex = (runner.lastCompletedSplitIndex ?? -1) + 1;
+          const isCurrent = runner.status === "Running" && nextSplitIndex === split.index;
+
+          if (completed) {
+            const delta = getSplitDelta(runner, split.index, runners);
+            return `<td class="split-cell split-done">OK ${escapeHtml(completed.clientElapsed || formatMs(completed.clientElapsedMs))} ${renderDeltaInlineHtml(delta)}</td>`;
+          }
+
+          if (isCurrent) {
+            const delta = getSplitDelta(runner, split.index, runners);
+            return `<td class="split-cell split-next">> running ${renderDeltaInlineHtml(delta)}</td>`;
+          }
+
+          if (runner.status === "Finished") {
+            return `<td class="split-cell split-pending">-</td>`;
+          }
+
+          return `<td class="split-cell split-pending">pending</td>`;
+        }).join("");
+
+        const rowCurrentClass = runners.some(runner =>
+          runner.status === "Running" &&
+          ((runner.lastCompletedSplitIndex ?? -1) + 1) === split.index
+        ) ? " split-current" : "";
+
+        return `
+          <tr class="${rowCurrentClass}">
+            <td class="split-name">${escapeHtml(split.name)}</td>
+            ${cells}
+          </tr>`;
+      }).join("");
+
+      splitTableWrapEl.innerHTML = `
+        <table class="split-table">
+          <thead>
+            <tr>
+              <th>Split</th>
+              ${runnerHeaders}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function renderResultsTable(state) {
+      const runners = getRunners(state);
+
+      if (!runners.length) {
+        resultsTableWrapEl.innerHTML = '<div class="muted">No runner data.</div>';
+        return;
+      }
+
+      const rows = runners
+        .slice()
+        .sort((left, right) => {
+          const leftDone = left.status === "Finished" ? 0 : 1;
+          const rightDone = right.status === "Finished" ? 0 : 1;
+          if (leftDone !== rightDone) { return leftDone - rightDone; }
+          return (left.finishedAtMs ?? left.clientElapsedMs ?? 0) - (right.finishedAtMs ?? right.clientElapsedMs ?? 0);
+        })
+        .map(runner => {
+          const clientMs = runner.status === "Finished" ? runner.finishedAtMs : runner.clientElapsedMs;
+          const serverMs = runner.status === "Finished" ? (runner.serverFinishedAtMs ?? runner.serverElapsedMs) : runner.serverElapsedMs;
+          const deltaMs = runner.timerDeltaMs ?? ((serverMs || 0) - (clientMs || 0));
+          const deltaText = runner.timerDelta || formatSignedMs(deltaMs);
+
+          return `
+            <tr>
+              <td class="split-name">${escapeHtml(runner.runnerId || "runner")}</td>
+              <td>${escapeHtml(runner.status || "-")}</td>
+              <td class="split-cell">${escapeHtml(formatMs(clientMs || 0))}</td>
+              <td class="split-cell">${escapeHtml(formatMs(serverMs || 0))}</td>
+              <td class="split-cell ${deltaClass(deltaMs)}">${escapeHtml(deltaText)}</td>
+              <td>${runner.connected ? "connected" : "disconnected"}</td>
+              <td>${escapeHtml(runner.lastCompletedSplitIndex ?? "-")}</td>
+            </tr>`;
+        }).join("");
+
+      resultsTableWrapEl.innerHTML = `
+        <table class="split-table">
+          <thead>
+            <tr>
+              <th>Runner</th>
+              <th>Status</th>
+              <th>Client time</th>
+              <th>Server time</th>
+              <th>Delta</th>
+              <th>Net</th>
+              <th>Last split</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function updatePageFromState(state) {
+      const runners = getRunners(state);
+      const connectedCount = runners.filter(runner => runner.connected).length;
+
+      const inputLockedCount = runners.filter(runner =>
+          runner.inputLocked || runner.inputLockReason
+      ).length;
+
+      const adminControlCount = runners.filter(runner =>
+          runner.adminControlMode
+      ).length;
+
+      runMetaEl.textContent = `${state.game} - ${state.category} / ${state.runId}`;
+      statusEl.textContent = state.status;
+      statusEl.className = "value " + (state.status === "Finished" ? "ok" : "");
+      attemptEl.textContent = state.attemptId || "-";
+      runnerSummaryEl.textContent = runners.length
+          ? inputLockedCount > 0
+              ? `${connectedCount}/${runners.length} connected · ${inputLockedCount} input locked`
+              : adminControlCount > 0
+                  ? `${connectedCount}/${runners.length} connected · ${adminControlCount} admin control`
+                  : `${connectedCount}/${runners.length} connected`
+          : "No runners";
+
+      runnerSummaryEl.className = "value " + (
+          inputLockedCount > 0
+              ? "bad"
+              : connectedCount > 0
+                  ? "ok"
+                  : "bad"
+      );
+
+      updateRunnerAnchors(runners);
+      renderRunnerCards(runners);
+      renderRunnerOverlayUrls(runners);
+      renderCameraSources(runners);
+      renderAssets();
+      renderSplitTable(state);
+      renderResultsTable(state);
+    }
+
+    function render() {
+      for (const [runnerId] of runnerAnchors) {
+        const domId = toDomId(runnerId);
+        const clientTimerEl = document.getElementById(`runnerClientTimer-${domId}`);
+        const serverTimerEl = document.getElementById(`runnerServerTimer-${domId}`);
+        const deltaEl = document.getElementById(`runnerDelta-${domId}`);
+
+        const clientMs = currentRunnerDisplayMs(runnerId, "client");
+        const serverMs = currentRunnerDisplayMs(runnerId, "server");
+        const deltaMs = serverMs - clientMs;
+
+        if (clientTimerEl) { clientTimerEl.textContent = formatMs(clientMs); }
+        if (serverTimerEl) { serverTimerEl.textContent = formatMs(serverMs); }
+        if (deltaEl) {
+          deltaEl.textContent = formatSignedMs(deltaMs);
+          deltaEl.className = deltaClass(deltaMs);
+        }
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    async function pollState() {
+      try {
+        await loadServerInfo();
+        await loadRunConfig();
+        await loadRunAssets();
+
+        const state = await fetchJson(`/api/runs/${encodeURIComponent(runId)}/display-state`, {
+          cache: "no-store",
+          headers: accessHeaders("view")
+        }, "Display state");
+
+        if (wasPollOffline) {
+          log("Connection restored.");
+        }
+
+        wasPollOffline = false;
+
+        lastState = state;
+        updatePageFromState(state);
+      } catch (error) {
+        const statusCode = error.status ?? null;
+        const activeRunHint = serverInfo?.activeRunId && serverInfo.activeRunId !== runId
+          ? ` Server active runId: ${serverInfo.activeRunId}.`
+          : "";
+
+        runMetaEl.textContent = `Failed to load ${runId}.${activeRunHint}`;
+        statusEl.textContent = statusCode === 401
+          ? "Access key error"
+          : statusCode === 404
+            ? "Wrong runId / not found"
+            : statusCode === 0
+              ? "Server offline"
+              : "Connection error";
+        runnerSummaryEl.textContent = "Unknown";
+        runnersGridEl.innerHTML = '<div class="muted">No runner data.</div>';
+        splitTableWrapEl.innerHTML = '<div class="muted">No split data.</div>';
+        resultsTableWrapEl.innerHTML = '<div class="muted">No result data.</div>';
+        assetSummaryEl.innerHTML = '<div class="asset-pill muted">No asset data.</div>';
+        if (!serverInfo) {
+          serverInfoSummaryEl.innerHTML = `<div class="asset-pill bad">${escapeHtml(error.message)}</div>`;
+        }
+        runnerAnchors.clear();
+
+        const now = Date.now();
+
+        if (!wasPollOffline || now - lastPollErrorLogAt > 15000) {
+          log(`Poll failed: ${error.message}`);
+          lastPollErrorLogAt = now;
+        }
+
+        wasPollOffline = true;
+      }
+    }
+
+    async function copyTextToClipboard(text) {
+      if (!text || text.startsWith("No ")) {
+        throw new Error("nothing to copy");
+      }
+
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      const copied = document.execCommand("copy");
+      textarea.remove();
+
+      if (!copied) {
+        throw new Error("copy failed");
+      }
+    }
+
+    copyOverlayBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(getOverlayUrl());
+        log("Overlay URL copied.");
+      } catch (error) {
+        log(`Copy overlay URL failed: ${error.message}`);
+      }
+    });
+
+    async function copyRunnerOverlayUrl(runnerId) {
+      try {
+        await copyTextToClipboard(getRunnerOverlayUrl(runnerId));
+        log(`Overlay URL copied for ${runnerId}.`);
+      } catch (error) {
+        log(`Copy overlay URL failed for ${runnerId}: ${error.message}`);
+      }
+    }
+
+    async function copyRunnerCameraUrl(runnerId) {
+      try {
+        await copyTextToClipboard(getRunnerCameraUrl(runnerId));
+        log(`${runnerId} camera source URL copied.`);
+      } catch (error) {
+        log(`Copy ${runnerId} camera source URL failed: ${error.message}`);
+      }
+    }
+
+    copySplitsUrlBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(splitsUrlEl.textContent);
+        log("LiveSplit splits URL copied.");
+      } catch (error) {
+        log(`Copy splits URL failed: ${error.message}`);
+      }
+    });
+
+    copyAutosplitterUrlBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(autosplitterUrlEl.textContent);
+        log("Autosplitter URL copied.");
+      } catch (error) {
+        log(`Copy autosplitter URL failed: ${error.message}`);
+      }
+    });
+
+    copyServerCommandBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(serverCommandEl.textContent);
+        log("Server URL copied.");
+      } catch (error) {
+        log(`Copy server URL failed: ${error.message}`);
+      }
+    });
+
+    copyRunner1CommandBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(runner1CommandEl.textContent);
+        log("Run ID copied.");
+      } catch (error) {
+        log(`Copy Run ID failed: ${error.message}`);
+      }
+    });
+
+    copyRunner2CommandBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(runner2CommandEl.textContent);
+        log("Runner IDs copied.");
+      } catch (error) {
+        log(`Copy runner IDs failed: ${error.message}`);
+      }
+    });
+
+    copyAdminCommandBtn.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(adminCommandEl.textContent);
+        log("Admin URL copied.");
+      } catch (error) {
+        log(`Copy admin URL failed: ${error.message}`);
+      }
+    });
+
+    loadBtn.addEventListener("click", async () => {
+      const value = runIdInput.value.trim();
+
+      if (!value) {
+        log("Run ID cannot be empty.");
+        return;
+      }
+
+      if (adminActionInProgress) {
+        return;
+      }
+
+      adminActionInProgress = true;
+      setAdminButtonsDisabled(true);
+
+      try {
+        const response = await fetch(`/api/runs/${encodeURIComponent(value)}/admin/load`, {
+          method: "POST",
+          headers: accessHeaders("admin")
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => null);
+          const parts = [
+              error?.error || `HTTP ${response.status}`,
+              error?.message,
+              error?.expectedConfigPath ? `Expected config: ${error.expectedConfigPath}` : null,
+              error?.configRunId ? `Config runId: ${error.configRunId}` : null,
+              error?.requestedRunId ? `Requested runId: ${error.requestedRunId}` : null
+          ].filter(Boolean);
+
+          throw new Error(parts.join(" | "));
+        }
+
+        const result = await response.json();
+
+        runId = result.runId || value;
+        runIdInput.value = runId;
+        runConfig = null;
+        runAssets = null;
+        runnerAnchors.clear();
+
+        updateOverlayLink();
+        updateCommands();
+
+        const url = new URL(window.location.href);
+        url.searchParams.set("runId", runId);
+        window.history.replaceState(null, "", url.toString());
+
+        log(`Server loaded runId=${runId} (${result.game || "unknown"} - ${result.category || "unknown"}, splits=${result.splitCount ?? "?"})`);
+        await pollState();
+      } catch (error) {
+        log(`Load run failed: ${error.message}`);
+      } finally {
+        adminActionInProgress = false;
+        setAdminButtonsDisabled(false);
+      }
+    });
+
+    async function adminRunnerAction(runnerId, action) {
+      if (adminActionInProgress) {
+        return;
+      }
+
+      const labels = {
+        start: "start the runner timer",
+        split: "apply the next split",
+        undo: "undo the last split/finish",
+        finish: "finish the runner timer"
+      };
+
+      const ok = confirm(
+        `Admin action for ${runnerId}: ${labels[action] || action}?\n\n` +
+        "This changes the official server state and should be used only as an emergency correction."
+      );
+
+      if (!ok) {
+        return;
+      }
+
+      adminActionInProgress = true;
+      setAdminButtonsDisabled(true);
+
+      try {
+        const response = await fetch(
+          `/api/runs/${encodeURIComponent(runId)}/admin/runners/${encodeURIComponent(runnerId)}/${encodeURIComponent(action)}`,
+          { method: "POST", headers: accessHeaders("admin") });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          throw new Error(`HTTP ${response.status}${errorText ? ` / ${errorText.slice(0, 180)}` : ""}`);
+        }
+
+        const result = await response.json();
+
+        if (result.accepted) {
+          log(`Admin ${action} accepted for ${runnerId}: status=${result.status}, lastSplit=${result.lastCompletedSplitIndex}`);
+        } else {
+          log(`Admin ${action} rejected for ${runnerId}: ${result.rejectReason || "unknown"}`);
+        }
+
+        await pollState();
+      } catch (error) {
+        log(`Admin ${action} failed for ${runnerId}: ${error.message}`);
+      } finally {
+        adminActionInProgress = false;
+        setAdminButtonsDisabled(false);
+      }
+    }
+
+    function setAdminButtonsDisabled(disabled) {
+      loadBtn.disabled = disabled;
+      newAttemptBtn.disabled = disabled;
+      resetBtn.disabled = disabled;
+      copyOverlayBtn.disabled = disabled;
+      copySplitsUrlBtn.disabled = disabled;
+      copyAutosplitterUrlBtn.disabled = disabled;
+      copyServerCommandBtn.disabled = disabled;
+      copyRunner1CommandBtn.disabled = disabled;
+      copyRunner2CommandBtn.disabled = disabled;
+      copyAdminCommandBtn.disabled = disabled;
+    }
+
+    function getCurrentAttemptLabel() {
+      return lastState?.attemptId || "unknown";
+    }
+
+    newAttemptBtn.addEventListener("click", async () => {
+      const now = Date.now();
+
+      if (adminActionInProgress) {
+        return;
+      }
+
+      if (now < newAttemptCooldownUntil) {
+        const secondsLeft = Math.ceil((newAttemptCooldownUntil - now) / 1000);
+        log(`New attempt is on cooldown. Try again in ${secondsLeft}s.`);
+        return;
+      }
+
+      const ok = confirm(
+        `Create a new attempt for runId=${runId}?\n\n` +
+        `Current attempt: ${getCurrentAttemptLabel()}\n\n` +
+        "This resets the server timer and old runner clients must restart/resume the new attempt."
+      );
+
+      if (!ok) {
+        return;
+      }
+
+      const originalText = newAttemptBtn.textContent;
+      adminActionInProgress = true;
+      setAdminButtonsDisabled(true);
+      newAttemptBtn.textContent = "Creating...";
+
+      try {
+        const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/debug/new-attempt`, {
+          method: "POST",
+          headers: accessHeaders("admin")
+        });
+
+        if (response.status === 409) {
+          const result = await response.json().catch(() => null);
+          const secondsLeft = result?.retryAfterSeconds || 10;
+
+          newAttemptCooldownUntil = Date.now() + secondsLeft * 1000;
+          log(`New attempt is on server cooldown. Try again in ${secondsLeft}s.`);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        newAttemptCooldownUntil = Date.now() + 10000;
+
+        log(`New attempt created: ${result.attemptId || "unknown attempt"}`);
+        await pollState();
+      } catch (error) {
+        log(`New attempt failed: ${error.message}`);
+      } finally {
+        adminActionInProgress = false;
+        newAttemptBtn.textContent = originalText;
+        setAdminButtonsDisabled(false);
+      }
+    });
+
+    resetBtn.addEventListener("click", async () => {
+      if (adminActionInProgress) {
+        return;
+      }
+
+      const ok = confirm(
+        `Reset server state for runId=${runId}?\n\n` +
+        `Current attempt: ${getCurrentAttemptLabel()}\n\n` +
+        "This resets only the server state for the current attempt.\n" +
+        "Runner local logs are not deleted and may restore old events.\n\n" +
+        "Use New attempt for a fresh race."
+      );
+
+      if (!ok) {
+        return;
+      }
+
+      adminActionInProgress = true;
+      const originalText = resetBtn.textContent;
+      setAdminButtonsDisabled(true);
+      resetBtn.textContent = "Resetting...";
+
+      try {
+        const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/debug/reset`, {
+          method: "POST",
+          headers: accessHeaders("admin")
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        newAttemptCooldownUntil = 0;
+
+        log("Server state reset.");
+        await pollState();
+      } catch (error) {
+        log(`Reset failed: ${error.message}`);
+      } finally {
+        adminActionInProgress = false;
+        resetBtn.textContent = originalText;
+        setAdminButtonsDisabled(false);
+      }
+    });
+
+    render();
+    pollState();
+    setInterval(pollState, 1000);
+  </script>
+</body>
+</html>
+
+
+
+
+
+

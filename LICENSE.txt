@@ -1,0 +1,37 @@
+TournamentTimer Custom Use License
+
+Copyright (C) 2026 Ilya Khaiko.
+All rights reserved except the permissions explicitly stated below.
+
+TournamentTimer is an author's project by Ilya Khaiko.
+
+Use of TournamentTimer is allowed only under these custom terms or by separate written permission from the author.
+
+Non-commercial private/friendly amateur tournament use may be allowed if it is small, non-public or limited-public, non-monetized, non-promotional, and not connected to paid access, paid participation, advertising, sponsorship, channel/brand growth, commercial production, paid services or organizational promotion.
+
+Commercial use is prohibited without separate written permission.
+
+Commercial use includes, but is not limited to:
+- public tournaments, streams, showmatches or events on monetized channels;
+- events supported by sponsors, advertisers, brands, organizations, studios, event teams or commercial communities;
+- paid entry, paid access, donation/ad campaigns, sponsor integrations or commercial broadcasts;
+- events intended to promote a channel, brand, organization, community, production team or paid service;
+- events with a prize pool of USD 300 or more, or equivalent value in another currency, unless separately approved;
+- resale, rental, white-label use, bundling TournamentTimer into paid services, production packages, tournament packages or third-party event work;
+- proprietary integrations, closed commercial deployments, paid setup, paid support or commercial hosting as a service.
+
+A small prize does not automatically make an event permitted. A small event can still be commercial if it is public, monetized, promotional, advertising-driven, sponsor-supported, or intended to grow a channel, audience, donations, subscriptions, views, brand or organization.
+
+If there is doubt whether an event is commercial or promotional, it requires separate written permission.
+
+Modification and redistribution are prohibited without separate permission.
+You may not modify, fork, remove author notices, remove usage terms, redistribute modified versions, present the project as your own work, or transfer the project to third parties for independent use outside the agreed scenario.
+
+The project is provided AS IS, without warranty of any kind. The author is not liable for failures, disputed results, network issues, configuration mistakes, data loss, stream failures, financial loss, or other consequences of using TournamentTimer.
+
+For the detailed Russian usage terms, see README_USAGE_TERMS_RU.md.
+
+Contact:
+Telegram: @diktor_ilyakhaiko
+YouTube: https://www.youtube.com/@diktor_ilyakhaiko
+Email: ilyakhaiko@gmail.com

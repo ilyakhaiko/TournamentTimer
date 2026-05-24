@@ -1,0 +1,12 @@
+﻿bin/
+obj/
+.vs/
+*.user
+*.suo
+TestResults/
+local-runs/
+server-runs/
+
+artifacts/
+timer-settings.json
+_local_ru_docs/

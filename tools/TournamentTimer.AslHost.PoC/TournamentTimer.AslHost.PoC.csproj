@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ApplicationIcon>..\..\assets\branding\tournament-timer.ico</ApplicationIcon>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="AutosplitterCatalogForm.cs" />
+    <Compile Remove="AutoSplitterCatalogService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+
+    <Reference Include="LiveSplit.ScriptableAutoSplit">
+      <HintPath>..\..\external\LiveSplit.ScriptableAutoSplit\artifacts\bin\LiveSplit.ScriptableAutoSplit\release\LiveSplit.ScriptableAutoSplit.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <Reference Include="LiveSplit.Core">
+      <HintPath>..\..\external\LiveSplit\bin\release\LiveSplit.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <Reference Include="UpdateManager">
+      <HintPath>..\..\external\LiveSplit\bin\release\UpdateManager.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <Reference Include="Irony">
+      <HintPath>..\..\external\LiveSplit.ScriptableAutoSplit\artifacts\bin\LiveSplit.ScriptableAutoSplit\release\Irony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

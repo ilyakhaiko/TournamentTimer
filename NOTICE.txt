@@ -1,0 +1,14 @@
+TournamentTimer
+
+Copyright (C) 2026 Ilya Khaiko.
+
+TournamentTimer is distributed under custom use terms. See LICENSE.txt and README_USAGE_TERMS_RU.md.
+
+Commercial use, modification, redistribution, white-label use, resale, rental, paid deployment or inclusion in paid production/event packages requires separate written permission from the author.
+
+The project is provided AS IS, without warranty of any kind.
+
+Contact:
+Telegram: @diktor_ilyakhaiko
+YouTube: https://www.youtube.com/@diktor_ilyakhaiko
+Email: ilyakhaiko@gmail.com

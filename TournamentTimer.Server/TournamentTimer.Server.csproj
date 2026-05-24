@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TournamentTimer.Core\TournamentTimer.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>..\assets\branding\tournament-timer.ico</ApplicationIcon>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

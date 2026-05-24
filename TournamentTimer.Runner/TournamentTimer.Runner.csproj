@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TournamentTimer.Core\TournamentTimer.Core.csproj" />
+    <ProjectReference Include="..\TournamentTimer.Runner.Core\TournamentTimer.Runner.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>..\assets\branding\tournament-timer.ico</ApplicationIcon>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

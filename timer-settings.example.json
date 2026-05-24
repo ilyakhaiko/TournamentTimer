@@ -1,0 +1,8 @@
+{
+  "runId": "local-test-run",
+  "serverUrl": "http://localhost:5177",
+  "runConfigPath": "configs\\local-test-run.json",
+  "adminKey": "CHANGE_ADMIN_KEY",
+  "runKey": "CHANGE_RUN_KEY",
+  "viewKey": "CHANGE_VIEW_KEY"
+}

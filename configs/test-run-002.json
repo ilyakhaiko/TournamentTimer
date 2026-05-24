@@ -1,0 +1,14 @@
+{
+  "runId": "test-run-002",
+  "game": "Second Test Game",
+  "category": "Any%",
+  "timingMode": "Rta",
+  "requireAllSplitsBeforeFinish": true,
+  "finishOnLastSplit": true,
+  "minimumMsBetweenSplits": 500,
+  "splits": [
+    { "index": 0, "name": "Intro" },
+    { "index": 1, "name": "Mid Boss" },
+    { "index": 2, "name": "Final Boss" }
+  ]
+}

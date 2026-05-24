@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="TournamentTimer.Core/TournamentTimer.Core.csproj" />
+  <Project Path="TournamentTimer.Runner.Core/TournamentTimer.Runner.Core.csproj" />
+  <Project Path="TournamentTimer.Runner.Wpf/TournamentTimer.Runner.Wpf.csproj" />
+  <Project Path="TournamentTimer.Runner/TournamentTimer.Runner.csproj" />
+  <Project Path="TournamentTimer.Server/TournamentTimer.Server.csproj" />
+  <Project Path="TournamentTimer.Tests/TournamentTimer.Tests.csproj" />
+</Solution>
