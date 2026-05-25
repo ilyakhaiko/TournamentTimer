@@ -20,6 +20,14 @@ namespace LiveSplit.TournamentTimerBridge
         private string _sessionId = CreateSessionId();
         private int _eventCounter;
         private int _lastSentSplitIndex = -1;
+        private DateTimeOffset _lastLiveUpdateSentAtUtc = DateTimeOffset.MinValue;
+        private long? _lastLiveUpdateSentGameTimeMs;
+        private long? _lastLiveUpdateSentRealTimeMs;
+        private bool? _lastLiveUpdateSentGameTimeRunning;
+        private long? _lastObservedGameTimeMs;
+        private long? _lastObservedRealTimeMs;
+        private bool? _lastObservedGameTimeRunning;
+        private DateTimeOffset _lastObservedGameTimeChangedAtUtc = DateTimeOffset.MinValue;
         private bool _inputLocked;
         private string _inputLockReason;
         private bool _disposed;
@@ -61,7 +69,7 @@ namespace LiveSplit.TournamentTimerBridge
 
         public override void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)
         {
-            // Event-driven component. Nothing to redraw.
+            MaybeSendLiveTimeState();
         }
 
         public override void Dispose()
@@ -87,6 +95,7 @@ namespace LiveSplit.TournamentTimerBridge
                 _sessionId = CreateSessionId();
                 _eventCounter = 0;
                 _lastSentSplitIndex = -1;
+                ResetLiveTimeStateTracking();
                 _inputLocked = false;
                 _inputLockReason = null;
             }
@@ -159,6 +168,7 @@ namespace LiveSplit.TournamentTimerBridge
                 _inputLocked = false;
                 _inputLockReason = null;
                 _lastSentSplitIndex = -1;
+                ResetLiveTimeStateTracking();
             }
 
             if (wasLocked)
@@ -177,13 +187,125 @@ namespace LiveSplit.TournamentTimerBridge
                 timerPhase: oldPhase.ToString());
         }
 
+        private void MaybeSendLiveTimeState()
+        {
+            if (!_settings.EnabledBridge || IsInputLocked())
+            {
+                return;
+            }
+
+            if (_state.CurrentPhase != TimerPhase.Running)
+            {
+                return;
+            }
+
+            var gameTimeMs = GetLiveSplitGameTimeMs(_state);
+
+            if (!gameTimeMs.HasValue)
+            {
+                return;
+            }
+
+            var realTimeMs = GetLiveSplitRealTimeMs(_state);
+            var now = DateTimeOffset.UtcNow;
+            var gameTimeRunning = IsGameTimeAdvancing(gameTimeMs, realTimeMs);
+
+            _lastObservedGameTimeMs = gameTimeMs;
+            _lastObservedRealTimeMs = realTimeMs;
+            _lastObservedGameTimeRunning = gameTimeRunning;
+
+            var stateChanged = _lastLiveUpdateSentGameTimeRunning.HasValue &&
+                _lastLiveUpdateSentGameTimeRunning.Value != gameTimeRunning;
+
+            var gameTimeJumped = _lastLiveUpdateSentGameTimeMs.HasValue &&
+                Math.Abs(gameTimeMs.Value - _lastLiveUpdateSentGameTimeMs.Value) >= 1000;
+
+            var resyncDue = now - _lastLiveUpdateSentAtUtc >= TimeSpan.FromMilliseconds(500);
+
+            if (!stateChanged && !gameTimeJumped && !resyncDue)
+            {
+                return;
+            }
+
+            _lastLiveUpdateSentAtUtc = now;
+            _lastLiveUpdateSentGameTimeMs = gameTimeMs;
+            _lastLiveUpdateSentRealTimeMs = realTimeMs;
+            _lastLiveUpdateSentGameTimeRunning = gameTimeRunning;
+
+            SendBridgeEvent(
+                eventType: "time",
+                splitIndex: _state.CurrentSplitIndex,
+                splitName: GetCurrentSplitName(),
+                liveSplitRealTimeMs: realTimeMs,
+                liveSplitGameTimeMs: gameTimeMs,
+                timerPhase: _state.CurrentPhase.ToString(),
+                gameTimeRunning: gameTimeRunning);
+        }
+
+        private bool IsGameTimeAdvancing(long? gameTimeMs, long? realTimeMs)
+        {
+            var previousGameTimeMs = _lastObservedGameTimeMs;
+            var previousRealTimeMs = _lastObservedRealTimeMs;
+            var now = DateTimeOffset.UtcNow;
+
+            if (!previousGameTimeMs.HasValue)
+            {
+                _lastObservedGameTimeChangedAtUtc = now;
+                return true;
+            }
+
+            if (gameTimeMs.HasValue && gameTimeMs.Value > previousGameTimeMs.Value)
+            {
+                _lastObservedGameTimeChangedAtUtc = now;
+                return true;
+            }
+
+            if (gameTimeMs.HasValue &&
+                gameTimeMs.Value == previousGameTimeMs.Value &&
+                realTimeMs.HasValue &&
+                previousRealTimeMs.HasValue &&
+                realTimeMs.Value > previousRealTimeMs.Value)
+            {
+                return now - _lastObservedGameTimeChangedAtUtc >= TimeSpan.FromMilliseconds(250)
+                    ? false
+                    : _lastObservedGameTimeRunning ?? true;
+            }
+
+            return _lastObservedGameTimeRunning ?? true;
+        }
+
+        private string GetCurrentSplitName()
+        {
+            var splitIndex = _state.CurrentSplitIndex;
+
+            if (_state.Run != null && splitIndex >= 0 && splitIndex < _state.Run.Count)
+            {
+                return _state.Run[splitIndex].Name;
+            }
+
+            return null;
+        }
+
+        private void ResetLiveTimeStateTracking()
+        {
+            _lastLiveUpdateSentAtUtc = DateTimeOffset.MinValue;
+            _lastLiveUpdateSentGameTimeMs = null;
+            _lastLiveUpdateSentRealTimeMs = null;
+            _lastLiveUpdateSentGameTimeRunning = null;
+            _lastObservedGameTimeMs = null;
+            _lastObservedRealTimeMs = null;
+            _lastObservedGameTimeRunning = null;
+            _lastObservedGameTimeChangedAtUtc = DateTimeOffset.MinValue;
+        }
+
         private void SendBridgeEvent(
             string eventType,
             int? splitIndex,
             string splitName,
             long? liveSplitRealTimeMs,
             long? liveSplitGameTimeMs,
-            string timerPhase)
+            string timerPhase,
+            bool? gameTimeRunning = null)
         {
             if (!_settings.EnabledBridge)
             {
@@ -217,13 +339,15 @@ namespace LiveSplit.TournamentTimerBridge
                 splitName,
                 liveSplitRealTimeMs,
                 liveSplitGameTimeMs,
-                timerPhase);
+                timerPhase,
+                gameTimeRunning);
 
             Task.Run(() =>
             {
                 var responseJson = PostJson(endpointUrl, json);
 
-                if (ShouldLockInput(responseJson))
+                if (!string.Equals(eventType, "time", StringComparison.OrdinalIgnoreCase) &&
+                    ShouldLockInput(responseJson))
                 {
                     LockInput(ExtractBridgeMessage(responseJson));
                 }
@@ -305,7 +429,8 @@ namespace LiveSplit.TournamentTimerBridge
             string splitName,
             long? liveSplitRealTimeMs,
             long? liveSplitGameTimeMs,
-            string timerPhase)
+            string timerPhase,
+            bool? gameTimeRunning = null)
         {
             var officialLiveSplitTimeMs = liveSplitGameTimeMs ?? liveSplitRealTimeMs ?? 0;
             var sb = new StringBuilder();
@@ -328,6 +453,8 @@ namespace LiveSplit.TournamentTimerBridge
             AppendJsonProperty(sb, "liveSplitRealTimeMs", liveSplitRealTimeMs.HasValue ? liveSplitRealTimeMs.Value.ToString() : "null", quoteValue: false);
             sb.Append(",");
             AppendJsonProperty(sb, "liveSplitGameTimeMs", liveSplitGameTimeMs.HasValue ? liveSplitGameTimeMs.Value.ToString() : "null", quoteValue: false);
+            sb.Append(",");
+            AppendJsonProperty(sb, "gameTimeRunning", gameTimeRunning.HasValue ? (gameTimeRunning.Value ? "true" : "false") : "null", quoteValue: false);
             sb.Append(",");
             AppendJsonProperty(sb, "timerPhase", timerPhase, quoteValue: true);
             sb.Append(",");

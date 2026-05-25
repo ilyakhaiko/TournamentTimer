@@ -128,6 +128,50 @@ public sealed class ServerEventClient : IDisposable
         }
     }
 
+
+    public async Task<DisplayTimeClientResponse> SendDisplayTimeAsync(
+        string runId,
+        string attemptId,
+        string runnerId,
+        string runnerClientId,
+        RunnerLiveDisplayUpdate update)
+    {
+        var request = new DisplayTimeClientRequest
+        {
+            AttemptId = attemptId,
+            ClientId = runnerClientId,
+            DisplayElapsedMs = update.DisplayElapsedMs,
+            TimingSource = update.TimingSource,
+            LiveSplitRealTimeMs = update.LiveSplitRealTimeMs,
+            LiveSplitGameTimeMs = update.LiveSplitGameTimeMs,
+            GameTimeRunning = update.GameTimeRunning,
+            SourceEventId = update.SourceEventId,
+            SourceOccurredAtUtc = update.SourceOccurredAtUtc
+        };
+
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"/api/runs/{runId}/runners/{Uri.EscapeDataString(runnerId)}/display-time",
+                request,
+                JsonOptions);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return DisplayTimeClientResponse.TransportFailed(
+                    await BuildHttpErrorAsync("DISPLAY TIME", response));
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<DisplayTimeClientResponse>(JsonOptions);
+
+            return result ?? DisplayTimeClientResponse.TransportFailed("empty_server_response");
+        }
+        catch (Exception ex)
+        {
+            return DisplayTimeClientResponse.TransportFailed(FriendlyException(ex));
+        }
+    }
+
     public async Task<InputLockClientResponse> ReportInputLockAsync(
         string runId,
         string attemptId,
@@ -414,6 +458,44 @@ public sealed record HeartbeatClientResponse
     public static HeartbeatClientResponse TransportFailed(string error) => new()
     {
         Accepted = false,
+        TransportError = error
+    };
+}
+
+public sealed record DisplayTimeClientRequest
+{
+    public required string AttemptId { get; init; }
+    public required string ClientId { get; init; }
+    public required long DisplayElapsedMs { get; init; }
+    public required RunTimingSource TimingSource { get; init; }
+    public long? LiveSplitRealTimeMs { get; init; }
+    public long? LiveSplitGameTimeMs { get; init; }
+    public bool GameTimeRunning { get; init; } = true;
+    public string? SourceEventId { get; init; }
+    public DateTimeOffset? SourceOccurredAtUtc { get; init; }
+}
+
+public sealed record DisplayTimeClientResponse
+{
+    public string? RunId { get; init; }
+    public string? AttemptId { get; init; }
+    public string? RunnerId { get; init; }
+    public bool Accepted { get; init; }
+    public string? RejectReason { get; init; }
+    public required long DisplayElapsedMs { get; init; }
+    public required RunTimingSource TimingSource { get; init; }
+    public required bool DisplayAutoAdvance { get; init; }
+    public DateTimeOffset? DisplayUpdatedAtUtc { get; init; }
+
+    public string? TransportError { get; init; }
+    public bool Sent => TransportError is null;
+
+    public static DisplayTimeClientResponse TransportFailed(string error) => new()
+    {
+        Accepted = false,
+        DisplayElapsedMs = 0,
+        TimingSource = RunTimingSource.RunnerStopwatch,
+        DisplayAutoAdvance = false,
         TransportError = error
     };
 }

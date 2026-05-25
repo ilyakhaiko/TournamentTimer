@@ -341,10 +341,7 @@ app.MapGet("/api/runs/{runId}/runners/{runnerId}/state", (string runId, string r
     lock (runLock)
     {
         var runner = EnsureRunner(runners, runnerId);
-        var displayElapsedMs = GetDisplayElapsedMs(
-            runner.State,
-            runner.LastAcceptedClientElapsedMs,
-            runner.LastAcceptedServerReceivedAtUtc);
+        var displayElapsedMs = GetRunnerClientDisplayElapsedMs(runner);
 
         return Results.Ok(new RunnerServerStateResponse
         {
@@ -407,6 +404,9 @@ app.MapGet("/api/runs/{runId}/display-state", (string runId) =>
 
             DisplayElapsedMs = primaryRunner.DisplayElapsedMs,
             DisplayElapsed = primaryRunner.DisplayElapsed,
+            DisplayTimingSource = primaryRunner.DisplayTimingSource,
+            DisplayAutoAdvance = primaryRunner.DisplayAutoAdvance,
+            DisplayUpdatedAtUtc = primaryRunner.DisplayUpdatedAtUtc,
             ClientElapsedMs = primaryRunner.ClientElapsedMs,
             ClientElapsed = primaryRunner.ClientElapsed,
             ServerElapsedMs = primaryRunner.ServerElapsedMs,
@@ -966,6 +966,9 @@ if (string.IsNullOrWhiteSpace(request.AttemptId))
     }
 });
 
+app.MapPost("/api/runs/{runId}/runners/{runnerId}/display-time", (string runId, string runnerId, RunnerDisplayTimeRequest request) =>
+    RunRunnerDisplayTime(runId, runnerId, request));
+
 app.MapPost("/api/runs/{runId}/runners/{runnerId}/input-lock", (string runId, string runnerId, RunnerInputLockRequest request) =>
     RunRunnerInputLock(runId, runnerId, request));
 
@@ -1222,6 +1225,114 @@ IResult CreateNewAttempt()
         runId = config.RunId,
         attemptId = currentAttemptId
     });
+}
+
+IResult RunRunnerDisplayTime(string runId, string runnerId, RunnerDisplayTimeRequest request)
+{
+    if (runId != config.RunId)
+    {
+        return Results.NotFound(new { error = "run_not_found" });
+    }
+
+    runnerId = NormalizeRunnerId(runnerId);
+
+    if (!IsValidRunnerId(runnerId))
+    {
+        return Results.BadRequest(new { error = "invalid_runner_id" });
+    }
+
+    lock (runLock)
+    {
+        var runner = EnsureRunner(runners, runnerId);
+        var serverReceivedAtUtc = DateTimeOffset.UtcNow;
+
+        RunnerDisplayTimeResponse Rejected(string reason) => new()
+        {
+            RunId = config.RunId,
+            AttemptId = currentAttemptId,
+            RunnerId = runnerId,
+            Accepted = false,
+            RejectReason = reason,
+            DisplayElapsedMs = GetRunnerClientDisplayElapsedMs(runner),
+            TimingSource = GetRunnerDisplayTimingSource(runner),
+            DisplayAutoAdvance = GetRunnerDisplayAutoAdvance(runner),
+            DisplayUpdatedAtUtc = runner.LiveDisplayUpdatedAtUtc
+        };
+
+        if (string.IsNullOrWhiteSpace(request.AttemptId))
+        {
+            return Results.Ok(Rejected("missing_attempt_id"));
+        }
+
+        if (!string.Equals(request.AttemptId, currentAttemptId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Ok(Rejected("wrong_attempt"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ClientId))
+        {
+            return Results.Ok(Rejected("missing_client_id"));
+        }
+
+        if (HasActiveDifferentClient(
+            runner,
+            request.ClientId,
+            serverReceivedAtUtc,
+            runnerDisconnectThreshold))
+        {
+            return Results.Ok(Rejected("runner_already_connected"));
+        }
+
+        if (runner.AdminControlMode)
+        {
+            return Results.Ok(Rejected("admin_control_mode"));
+        }
+
+        if (runner.InputLocked)
+        {
+            return Results.Ok(Rejected("input_locked"));
+        }
+
+        if (runner.State.Status != RunStatus.Running)
+        {
+            return Results.Ok(new RunnerDisplayTimeResponse
+            {
+                RunId = config.RunId,
+                AttemptId = currentAttemptId,
+                RunnerId = runnerId,
+                Accepted = true,
+                RejectReason = $"ignored_state_{runner.State.Status}",
+                DisplayElapsedMs = GetRunnerClientDisplayElapsedMs(runner),
+                TimingSource = GetRunnerDisplayTimingSource(runner),
+                DisplayAutoAdvance = GetRunnerDisplayAutoAdvance(runner),
+                DisplayUpdatedAtUtc = runner.LiveDisplayUpdatedAtUtc
+            });
+        }
+
+        var validationError = ValidateDisplayTimeRequest(request);
+
+        if (validationError is not null)
+        {
+            return Results.Ok(Rejected(validationError));
+        }
+
+        ApplyLiveDisplayTime(runner, request, serverReceivedAtUtc);
+        runner.ClientId = request.ClientId;
+        runner.LastHeartbeatAtUtc = serverReceivedAtUtc;
+
+        return Results.Ok(new RunnerDisplayTimeResponse
+        {
+            RunId = config.RunId,
+            AttemptId = currentAttemptId,
+            RunnerId = runnerId,
+            Accepted = true,
+            RejectReason = null,
+            DisplayElapsedMs = GetRunnerClientDisplayElapsedMs(runner),
+            TimingSource = GetRunnerDisplayTimingSource(runner),
+            DisplayAutoAdvance = GetRunnerDisplayAutoAdvance(runner),
+            DisplayUpdatedAtUtc = runner.LiveDisplayUpdatedAtUtc
+        });
+    }
 }
 
 IResult RunRunnerInputLock(string runId, string runnerId, RunnerInputLockRequest request)
@@ -1755,6 +1866,64 @@ static long GetDisplayElapsedMs(
     return lastAcceptedClientElapsedMs + elapsedSinceLastAcceptedEventMs;
 }
 
+static bool HasFreshRunnerLiveDisplay(RunnerRuntimeState runner)
+{
+    if (runner.State.Status != RunStatus.Running ||
+        !runner.LiveDisplayElapsedMs.HasValue ||
+        !runner.LiveDisplayUpdatedAtUtc.HasValue)
+    {
+        return false;
+    }
+
+    var liveDisplayAge = DateTimeOffset.UtcNow - runner.LiveDisplayUpdatedAtUtc.Value;
+
+    return liveDisplayAge >= TimeSpan.Zero &&
+        liveDisplayAge <= TimeSpan.FromSeconds(2);
+}
+
+static long GetRunnerClientDisplayElapsedMs(RunnerRuntimeState runner)
+{
+    if (HasFreshRunnerLiveDisplay(runner))
+    {
+        if (!runner.LiveDisplayAutoAdvance)
+        {
+            return runner.LiveDisplayElapsedMs!.Value;
+        }
+
+        var elapsedSinceLiveUpdateMs =
+            (long)(DateTimeOffset.UtcNow - runner.LiveDisplayUpdatedAtUtc!.Value).TotalMilliseconds;
+
+        if (elapsedSinceLiveUpdateMs < 0)
+        {
+            elapsedSinceLiveUpdateMs = 0;
+        }
+
+        return runner.LiveDisplayElapsedMs!.Value + elapsedSinceLiveUpdateMs;
+    }
+
+    return GetDisplayElapsedMs(
+        runner.State,
+        runner.LastAcceptedClientElapsedMs,
+        runner.LastAcceptedServerReceivedAtUtc);
+}
+
+static RunTimingSource GetRunnerDisplayTimingSource(RunnerRuntimeState runner)
+{
+    return HasFreshRunnerLiveDisplay(runner)
+        ? runner.LiveDisplayTimingSource ?? RunTimingSource.RunnerStopwatch
+        : RunTimingSource.RunnerStopwatch;
+}
+
+static bool GetRunnerDisplayAutoAdvance(RunnerRuntimeState runner)
+{
+    if (!HasFreshRunnerLiveDisplay(runner))
+    {
+        return runner.State.Status == RunStatus.Running;
+    }
+
+    return runner.LiveDisplayAutoAdvance;
+}
+
 static RunnerDisplayStateResponse ToRunnerDisplayState(
     string runnerId,
     RunnerRuntimeState runner,
@@ -1762,10 +1931,7 @@ static RunnerDisplayStateResponse ToRunnerDisplayState(
     TimeSpan runnerDisconnectThreshold,
     TimeSpan cameraDisconnectThreshold)
 {
-    var clientElapsedMs = GetDisplayElapsedMs(
-        runner.State,
-        runner.LastAcceptedClientElapsedMs,
-        runner.LastAcceptedServerReceivedAtUtc);
+    var clientElapsedMs = GetRunnerClientDisplayElapsedMs(runner);
     var serverElapsedMs = GetServerDisplayElapsedMs(runner);
     var timerDeltaMs = serverElapsedMs - clientElapsedMs;
 
@@ -1795,6 +1961,9 @@ static RunnerDisplayStateResponse ToRunnerDisplayState(
         Status = runner.State.Status,
         DisplayElapsedMs = clientElapsedMs,
         DisplayElapsed = FormatMs(clientElapsedMs),
+        DisplayTimingSource = GetRunnerDisplayTimingSource(runner),
+        DisplayAutoAdvance = GetRunnerDisplayAutoAdvance(runner),
+        DisplayUpdatedAtUtc = runner.LiveDisplayUpdatedAtUtc,
         ClientElapsedMs = clientElapsedMs,
         ClientElapsed = FormatMs(clientElapsedMs),
         ServerElapsedMs = serverElapsedMs,
@@ -2365,6 +2534,78 @@ static bool IsValidRunnerId(string runnerId)
 }
 
 
+static string? ValidateDisplayTimeRequest(RunnerDisplayTimeRequest request)
+{
+    if (request.DisplayElapsedMs < 0 || request.LiveSplitRealTimeMs is < 0 || request.LiveSplitGameTimeMs is < 0)
+    {
+        return "invalid_display_elapsed_time";
+    }
+
+    if (request.SourceEventId is not null && request.SourceEventId.Length > 160)
+    {
+        return "source_event_id_too_long";
+    }
+
+    return request.TimingSource switch
+    {
+        RunTimingSource.LiveSplitGameTime when request.LiveSplitGameTimeMs is null =>
+            "missing_livesplit_game_time",
+
+        RunTimingSource.LiveSplitGameTime when request.LiveSplitGameTimeMs.Value != request.DisplayElapsedMs =>
+            "livesplit_game_time_mismatch",
+
+        RunTimingSource.LiveSplitRealTime =>
+            "livesplit_realtime_display_not_supported_for_lrt",
+
+        RunTimingSource.RunnerStopwatch =>
+            "runner_stopwatch_display_update_not_supported",
+
+        _ => null
+    };
+}
+
+static void ApplyLiveDisplayTime(
+    RunnerRuntimeState runner,
+    RunnerDisplayTimeRequest request,
+    DateTimeOffset serverReceivedAtUtc)
+{
+    runner.LiveDisplayElapsedMs = request.DisplayElapsedMs;
+    runner.LiveDisplayTimingSource = request.TimingSource;
+    runner.LiveDisplayAutoAdvance = request.GameTimeRunning;
+    runner.LiveDisplayUpdatedAtUtc = serverReceivedAtUtc;
+    runner.LiveDisplaySourceEventId = request.SourceEventId;
+}
+
+static void ApplyLiveDisplayFromAcceptedEvent(RunnerRuntimeState runner, RunEvent runEvent)
+{
+    if (runner.State.Status == RunStatus.Running &&
+        runEvent.TimingSource == RunTimingSource.LiveSplitGameTime &&
+        runEvent.LiveSplitGameTimeMs.HasValue)
+    {
+        runner.LiveDisplayElapsedMs = runEvent.ClientElapsedMs;
+        runner.LiveDisplayTimingSource = RunTimingSource.LiveSplitGameTime;
+        runner.LiveDisplayAutoAdvance = true;
+        runner.LiveDisplayUpdatedAtUtc = DateTimeOffset.UtcNow;
+        runner.LiveDisplaySourceEventId = runEvent.SourceEventId;
+
+        return;
+    }
+
+    if (runner.State.Status != RunStatus.Running)
+    {
+        ClearLiveDisplayTime(runner);
+    }
+}
+
+static void ClearLiveDisplayTime(RunnerRuntimeState runner)
+{
+    runner.LiveDisplayElapsedMs = null;
+    runner.LiveDisplayTimingSource = null;
+    runner.LiveDisplayAutoAdvance = false;
+    runner.LiveDisplayUpdatedAtUtc = null;
+    runner.LiveDisplaySourceEventId = null;
+}
+
 static string? ValidateRunEventTiming(RunEvent runEvent)
 {
     if (runEvent.LiveSplitRealTimeMs is < 0 || runEvent.LiveSplitGameTimeMs is < 0)
@@ -2572,6 +2813,7 @@ static bool IsRunnerWriteApi(string path, string method)
     return string.Equals(method, "POST", StringComparison.OrdinalIgnoreCase)
         && (path.EndsWith("/heartbeat", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith("/events", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/display-time", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith("/input-lock", StringComparison.OrdinalIgnoreCase));
 }
 
@@ -2890,6 +3132,8 @@ static void ApplyAcceptedServerTiming(
 
     runner.LastAcceptedClientElapsedMs = runEvent.ClientElapsedMs;
     runner.LastAcceptedServerReceivedAtUtc = serverReceivedAtUtc;
+
+    ApplyLiveDisplayFromAcceptedEvent(runner, runEvent);
 }
 
 static DateTimeOffset? EstimateServerStartedAtUtc(
@@ -3068,6 +3312,12 @@ public sealed class RunnerRuntimeState
     public string? ClientId { get; set; }
     public DateTimeOffset? LastHeartbeatAtUtc { get; set; }
 
+    public long? LiveDisplayElapsedMs { get; set; }
+    public RunTimingSource? LiveDisplayTimingSource { get; set; }
+    public bool LiveDisplayAutoAdvance { get; set; }
+    public DateTimeOffset? LiveDisplayUpdatedAtUtc { get; set; }
+    public string? LiveDisplaySourceEventId { get; set; }
+
     public string CameraStatus { get; set; } = "offline";
     public string? CameraAttemptId { get; set; }
     public string? CameraClientId { get; set; }
@@ -3245,6 +3495,32 @@ public sealed record AdminActionResponse
     public required bool AdminControlMode { get; init; }
 }
 
+public sealed record RunnerDisplayTimeRequest
+{
+    public required string AttemptId { get; init; }
+    public required string ClientId { get; init; }
+    public required long DisplayElapsedMs { get; init; }
+    public required RunTimingSource TimingSource { get; init; }
+    public long? LiveSplitRealTimeMs { get; init; }
+    public long? LiveSplitGameTimeMs { get; init; }
+    public bool GameTimeRunning { get; init; } = true;
+    public string? SourceEventId { get; init; }
+    public DateTimeOffset? SourceOccurredAtUtc { get; init; }
+}
+
+public sealed record RunnerDisplayTimeResponse
+{
+    public required string RunId { get; init; }
+    public required string AttemptId { get; init; }
+    public required string RunnerId { get; init; }
+    public required bool Accepted { get; init; }
+    public string? RejectReason { get; init; }
+    public required long DisplayElapsedMs { get; init; }
+    public required RunTimingSource TimingSource { get; init; }
+    public required bool DisplayAutoAdvance { get; init; }
+    public DateTimeOffset? DisplayUpdatedAtUtc { get; init; }
+}
+
 public sealed record ClientEventRequest
 {
     public string? RunnerId { get; init; }
@@ -3307,6 +3583,9 @@ public sealed record DisplayStateResponse
 
     public required long DisplayElapsedMs { get; init; }
     public required string DisplayElapsed { get; init; }
+    public required RunTimingSource DisplayTimingSource { get; init; }
+    public required bool DisplayAutoAdvance { get; init; }
+    public DateTimeOffset? DisplayUpdatedAtUtc { get; init; }
     public required long ClientElapsedMs { get; init; }
     public required string ClientElapsed { get; init; }
     public required long ServerElapsedMs { get; init; }
@@ -3337,6 +3616,9 @@ public sealed record RunnerDisplayStateResponse
     public required RunStatus Status { get; init; }
     public required long DisplayElapsedMs { get; init; }
     public required string DisplayElapsed { get; init; }
+    public required RunTimingSource DisplayTimingSource { get; init; }
+    public required bool DisplayAutoAdvance { get; init; }
+    public DateTimeOffset? DisplayUpdatedAtUtc { get; init; }
     public required long ClientElapsedMs { get; init; }
     public required string ClientElapsed { get; init; }
     public required long ServerElapsedMs { get; init; }

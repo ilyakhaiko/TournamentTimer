@@ -1222,6 +1222,27 @@ public partial class MainWindow : Window
                 message: "livesplit_input_disabled");
         }
 
+        if (eventType == "time")
+        {
+            if (_session.State.Status != RunStatus.Running)
+            {
+                return BuildBridgeResponse(
+                    accepted: true,
+                    alreadyProcessed: true,
+                    message: $"time_ignored_state_{_session.State.Status}");
+            }
+
+            if (!TryBuildLiveSplitDisplayUpdate(request, out var displayUpdate, out var displayError))
+            {
+                return BuildBridgeResponse(
+                    accepted: false,
+                    alreadyProcessed: false,
+                    message: displayError);
+            }
+
+            return await RunBridgeDisplayTimeAsync(displayUpdate);
+        }
+
         if (eventType == "start")
         {
             if (_session.State.Status != RunStatus.Ready)
@@ -1297,6 +1318,37 @@ public partial class MainWindow : Window
             message: $"unknown_event_type_{eventType}");
     }
 
+
+    private static bool TryBuildLiveSplitDisplayUpdate(
+        LocalBridgeEventRequest request,
+        out RunnerLiveDisplayUpdate update,
+        out string reason)
+    {
+        update = null!;
+        reason = "";
+
+        var gameTimeMs = NormalizeElapsedMs(request.LiveSplitGameTimeMs);
+        var realTimeMs = NormalizeElapsedMs(request.LiveSplitRealTimeMs);
+
+        if (gameTimeMs is null)
+        {
+            reason = "missing_livesplit_game_time";
+            return false;
+        }
+
+        update = new RunnerLiveDisplayUpdate
+        {
+            DisplayElapsedMs = gameTimeMs.Value,
+            TimingSource = RunTimingSource.LiveSplitGameTime,
+            LiveSplitRealTimeMs = realTimeMs,
+            LiveSplitGameTimeMs = gameTimeMs,
+            GameTimeRunning = request.GameTimeRunning ?? true,
+            SourceEventId = request.SourceEventId,
+            SourceOccurredAtUtc = request.OccurredAtUtc
+        };
+
+        return true;
+    }
 
     private static bool TryBuildLiveSplitTiming(
         LocalBridgeEventRequest request,
@@ -1417,6 +1469,46 @@ public partial class MainWindow : Window
             accepted: false,
             alreadyProcessed: false,
             message: $"livesplit_input_disabled_{reason}");
+    }
+
+    private async Task<LocalBridgeEventResponse> RunBridgeDisplayTimeAsync(RunnerLiveDisplayUpdate update)
+    {
+        if (_session is null)
+        {
+            return BuildBridgeResponse(
+                accepted: false,
+                alreadyProcessed: false,
+                message: "runner_not_connected");
+        }
+
+        try
+        {
+            var result = await _session.ApplyLiveDisplayUpdateAsync(update);
+
+            if (result.ServerResponse is not null &&
+                result.ServerResponse.Sent &&
+                IsWrongAttempt(result.ServerResponse.RejectReason))
+            {
+                await ForceDisconnectForAttemptChangeAsync("LiveSplit display update rejected wrong attempt");
+
+                return BuildBridgeResponse(
+                    accepted: false,
+                    alreadyProcessed: false,
+                    message: "server_attempt_changed_reconnect");
+            }
+
+            return BuildBridgeResponse(
+                accepted: result.Accepted,
+                alreadyProcessed: false,
+                message: result.Message);
+        }
+        catch (Exception ex)
+        {
+            return BuildBridgeResponse(
+                accepted: false,
+                alreadyProcessed: false,
+                message: $"display_time_error_{ex.Message}");
+        }
     }
 
     private async Task<LocalBridgeEventResponse> RunBridgeActionAsync(

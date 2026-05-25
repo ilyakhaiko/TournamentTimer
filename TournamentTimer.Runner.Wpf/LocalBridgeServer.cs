@@ -278,6 +278,7 @@ public sealed record LocalBridgeEventRequest
     public long? LiveSplitTimeMs { get; init; }
     public long? LiveSplitRealTimeMs { get; init; }
     public long? LiveSplitGameTimeMs { get; init; }
+    public bool? GameTimeRunning { get; init; }
     public string? TimerPhase { get; init; }
     public DateTimeOffset? OccurredAtUtc { get; init; }
 }

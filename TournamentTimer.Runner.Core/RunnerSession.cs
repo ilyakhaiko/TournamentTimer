@@ -15,6 +15,12 @@ public sealed class RunnerSession : IAsyncDisposable
 
     private Task? _heartbeatTask;
     private long? _resumeTimestamp;
+    private long? _liveDisplayElapsedMs;
+    private long? _liveDisplayTimestamp;
+    private RunTimingSource? _liveDisplayTimingSource;
+    private bool _liveDisplayAutoAdvance;
+    private string? _liveDisplaySourceEventId;
+    private DateTimeOffset? _liveDisplayUpdatedAtUtc;
     private bool _disposed;
     private readonly Dictionary<int, RunnerCompletedSplit> _completedSplits = [];
 
@@ -91,7 +97,9 @@ public sealed class RunnerSession : IAsyncDisposable
         }
     }
 
-    public long CurrentElapsedMs => GetCurrentElapsedMs(_resumeTimestamp, BaseElapsedMs);
+    public long CurrentElapsedMs => GetDisplayElapsedMs();
+    public RunTimingSource? LiveDisplayTimingSource => _liveDisplayTimingSource;
+    public bool LiveDisplayAutoAdvance => _liveDisplayAutoAdvance;
 
     public string? CurrentSplitName
     {
@@ -486,6 +494,48 @@ public sealed class RunnerSession : IAsyncDisposable
         return response;
     }
 
+    public async Task<RunnerSessionLiveDisplayResult> ApplyLiveDisplayUpdateAsync(RunnerLiveDisplayUpdate update)
+    {
+        if (AdminControlMode)
+        {
+            return RunnerSessionLiveDisplayResult.LocalRejected("admin_control_mode");
+        }
+
+        if (State.Status != RunStatus.Running)
+        {
+            return RunnerSessionLiveDisplayResult.Ignored($"state_{State.Status}");
+        }
+
+        if (update.DisplayElapsedMs < 0)
+        {
+            return RunnerSessionLiveDisplayResult.LocalRejected("invalid_live_display_elapsed_time");
+        }
+
+        ApplyLiveDisplayOverride(update);
+
+        if (Options.RunId is null)
+        {
+            return RunnerSessionLiveDisplayResult.LocalOnly(update.DisplayElapsedMs);
+        }
+
+        var response = await _serverClient.SendDisplayTimeAsync(
+            Config.RunId,
+            AttemptId,
+            RunnerId,
+            Options.RunnerClientId,
+            update);
+
+        return new RunnerSessionLiveDisplayResult
+        {
+            Accepted = response.Sent && response.Accepted,
+            Message = response.Sent
+                ? response.Accepted ? "display_time_synced" : response.RejectReason ?? "display_time_rejected"
+                : response.TransportError,
+            DisplayElapsedMs = update.DisplayElapsedMs,
+            ServerResponse = response
+        };
+    }
+
     public async Task StopAsync()
     {
         if (_disposed)
@@ -542,6 +592,8 @@ public sealed class RunnerSession : IAsyncDisposable
 
         State = result.State;
         BaseElapsedMs = runEvent.ClientElapsedMs;
+
+        ApplyLiveDisplayFromAcceptedEvent(runEvent);
 
         if (runEvent is SplitRunEvent splitEvent)
         {
@@ -633,6 +685,8 @@ public sealed class RunnerSession : IAsyncDisposable
         _resumeTimestamp = status == RunStatus.Running
             ? Stopwatch.GetTimestamp()
             : null;
+
+        ClearLiveDisplayOverride();
 
         ApplyCompletedSplitsFromServer(serverState.CompletedSplits);
 
@@ -866,6 +920,85 @@ public sealed class RunnerSession : IAsyncDisposable
         }
     }
 
+    private long GetDisplayElapsedMs()
+    {
+        if (HasFreshLiveDisplayOverride())
+        {
+            if (!_liveDisplayAutoAdvance || !_liveDisplayTimestamp.HasValue)
+            {
+                return _liveDisplayElapsedMs!.Value;
+            }
+
+            var elapsedTicks = Stopwatch.GetTimestamp() - _liveDisplayTimestamp.Value;
+            var elapsedSinceLiveUpdateMs = (long)(elapsedTicks * 1000.0 / Stopwatch.Frequency);
+
+            return Math.Max(0, _liveDisplayElapsedMs!.Value + elapsedSinceLiveUpdateMs);
+        }
+
+        return GetCurrentElapsedMs(_resumeTimestamp, BaseElapsedMs);
+    }
+
+    private bool HasFreshLiveDisplayOverride()
+    {
+        if (!_liveDisplayElapsedMs.HasValue ||
+            !_liveDisplayUpdatedAtUtc.HasValue ||
+            State.Status != RunStatus.Running)
+        {
+            return false;
+        }
+
+        var liveDisplayAge = DateTimeOffset.UtcNow - _liveDisplayUpdatedAtUtc.Value;
+
+        return liveDisplayAge >= TimeSpan.Zero &&
+            liveDisplayAge <= TimeSpan.FromSeconds(2);
+    }
+
+    private void ApplyLiveDisplayOverride(RunnerLiveDisplayUpdate update)
+    {
+        _liveDisplayElapsedMs = update.DisplayElapsedMs;
+        _liveDisplayTimestamp = Stopwatch.GetTimestamp();
+        _liveDisplayTimingSource = update.TimingSource;
+        _liveDisplayAutoAdvance = update.GameTimeRunning;
+        _liveDisplaySourceEventId = update.SourceEventId;
+        _liveDisplayUpdatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    private void ApplyLiveDisplayFromAcceptedEvent(RunEvent runEvent)
+    {
+        if (runEvent.TimingSource == RunTimingSource.LiveSplitGameTime &&
+            runEvent.LiveSplitGameTimeMs.HasValue &&
+            State.Status == RunStatus.Running)
+        {
+            ApplyLiveDisplayOverride(new RunnerLiveDisplayUpdate
+            {
+                DisplayElapsedMs = runEvent.ClientElapsedMs,
+                TimingSource = RunTimingSource.LiveSplitGameTime,
+                LiveSplitRealTimeMs = runEvent.LiveSplitRealTimeMs,
+                LiveSplitGameTimeMs = runEvent.LiveSplitGameTimeMs,
+                GameTimeRunning = true,
+                SourceEventId = runEvent.SourceEventId,
+                SourceOccurredAtUtc = runEvent.SourceOccurredAtUtc
+            });
+
+            return;
+        }
+
+        if (State.Status != RunStatus.Running)
+        {
+            ClearLiveDisplayOverride();
+        }
+    }
+
+    private void ClearLiveDisplayOverride()
+    {
+        _liveDisplayElapsedMs = null;
+        _liveDisplayTimestamp = null;
+        _liveDisplayTimingSource = null;
+        _liveDisplayAutoAdvance = false;
+        _liveDisplaySourceEventId = null;
+        _liveDisplayUpdatedAtUtc = null;
+    }
+
     private static string CreateClientEventId(string? sourceEventId)
     {
         return string.IsNullOrWhiteSpace(sourceEventId)
@@ -938,6 +1071,44 @@ public sealed class RunnerSession : IAsyncDisposable
             ? time.ToString(@"h\:mm\:ss\.fff")
             : time.ToString(@"m\:ss\.fff");
     }
+}
+
+public sealed record RunnerLiveDisplayUpdate
+{
+    public required long DisplayElapsedMs { get; init; }
+    public required RunTimingSource TimingSource { get; init; }
+    public long? LiveSplitRealTimeMs { get; init; }
+    public long? LiveSplitGameTimeMs { get; init; }
+    public bool GameTimeRunning { get; init; } = true;
+    public string? SourceEventId { get; init; }
+    public DateTimeOffset? SourceOccurredAtUtc { get; init; }
+}
+
+public sealed record RunnerSessionLiveDisplayResult
+{
+    public required bool Accepted { get; init; }
+    public string? Message { get; init; }
+    public long DisplayElapsedMs { get; init; }
+    public DisplayTimeClientResponse? ServerResponse { get; init; }
+
+    public static RunnerSessionLiveDisplayResult LocalRejected(string reason) => new()
+    {
+        Accepted = false,
+        Message = reason
+    };
+
+    public static RunnerSessionLiveDisplayResult Ignored(string reason) => new()
+    {
+        Accepted = true,
+        Message = reason
+    };
+
+    public static RunnerSessionLiveDisplayResult LocalOnly(long displayElapsedMs) => new()
+    {
+        Accepted = true,
+        Message = "local_only",
+        DisplayElapsedMs = displayElapsedMs
+    };
 }
 
 public sealed record RunnerExternalTiming

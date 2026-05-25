@@ -1016,6 +1016,9 @@
         status: state.status,
         displayElapsedMs: state.displayElapsedMs,
         displayElapsed: state.displayElapsed,
+        displayTimingSource: state.displayTimingSource || "RunnerStopwatch",
+        displayAutoAdvance: state.displayAutoAdvance ?? true,
+        displayUpdatedAtUtc: state.displayUpdatedAtUtc || null,
         clientElapsedMs: state.clientElapsedMs ?? state.displayElapsedMs,
         clientElapsed: state.clientElapsed ?? state.displayElapsed,
         serverElapsedMs: state.serverElapsedMs ?? state.displayElapsedMs,
@@ -1038,8 +1041,9 @@
       }
 
       const base = mode === "server" ? anchor.serverElapsedMs : anchor.clientElapsedMs;
+      const autoAdvance = mode === "server" ? true : anchor.displayAutoAdvance;
 
-      if (anchor.status !== "Running") {
+      if (anchor.status !== "Running" || !autoAdvance) {
         return base;
       }
 
@@ -1059,6 +1063,8 @@
           elapsedMs: runner.displayElapsedMs || 0,
           clientElapsedMs: runner.clientElapsedMs ?? runner.displayElapsedMs ?? 0,
           serverElapsedMs: runner.serverElapsedMs ?? runner.displayElapsedMs ?? 0,
+          displayAutoAdvance: runner.displayAutoAdvance ?? true,
+          displayTimingSource: runner.displayTimingSource || "RunnerStopwatch",
           performanceMs: now
         });
       }
